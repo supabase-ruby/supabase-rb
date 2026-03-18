@@ -1379,4 +1379,287 @@ RSpec.describe "Request body assertions" do
       }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
     end
   end
+
+  # ─── US-003: User Management Methods Audit ───────────────────────────────────
+
+  describe "get_user" do
+    it "sends GET /user with session access_token when no JWT provided" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return({"user" => {"id" => "u1", "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}}})
+
+      client.get_user
+
+      expect(client).to have_received(:_request).with("GET", "user", hash_including(jwt: "mock-access-token"))
+    end
+
+    it "sends GET /user with provided JWT instead of session token" do
+      allow(client).to receive(:_request).and_return({"user" => {"id" => "u1", "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}}})
+
+      client.get_user("custom-jwt-token")
+
+      expect(client).to have_received(:_request).with("GET", "user", hash_including(jwt: "custom-jwt-token"))
+    end
+
+    it "returns nil when no session and no JWT provided" do
+      allow(client).to receive(:get_session).and_return(nil)
+
+      result = client.get_user
+      expect(result).to be_nil
+    end
+
+    it "returns UserResponse with parsed user data" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return({"user" => {"id" => "u1", "aud" => "test", "email" => "a@b.com", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}}})
+
+      result = client.get_user
+      expect(result).to be_a(Supabase::Auth::Types::UserResponse)
+      expect(result.user.id).to eq("u1")
+    end
+
+    it "does not check session when JWT is explicitly provided (matching Python)" do
+      allow(client).to receive(:_request).and_return({"user" => {"id" => "u1", "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}}})
+
+      # Should NOT call get_session when jwt is provided
+      expect(client).not_to receive(:get_session)
+      client.get_user("explicit-jwt")
+    end
+  end
+
+  describe "update_user" do
+    it "sends PUT /user with attributes body and session JWT" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return({"user" => {"id" => "u1", "aud" => "", "email" => "new@test.com", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}}})
+      allow(client).to receive(:_save_session)
+      allow(client).to receive(:_notify_all_subscribers)
+
+      attributes = {email: "new@test.com"}
+      client.update_user(attributes)
+
+      expect(client).to have_received(:_request).with("PUT", "user", hash_including(
+        jwt: "mock-access-token",
+        body: {email: "new@test.com"}
+      ))
+    end
+
+    it "passes email_redirect_to as redirect_to parameter" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return({"user" => {"id" => "u1", "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}}})
+      allow(client).to receive(:_save_session)
+      allow(client).to receive(:_notify_all_subscribers)
+
+      client.update_user({email: "x@y.com"}, {email_redirect_to: "https://example.com/confirm"})
+
+      expect(client).to have_received(:_request).with("PUT", "user", hash_including(
+        redirect_to: "https://example.com/confirm"
+      ))
+    end
+
+    it "raises AuthSessionMissing when no session" do
+      allow(client).to receive(:get_session).and_return(nil)
+
+      expect {
+        client.update_user({email: "x@y.com"})
+      }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
+    end
+
+    it "updates session user and notifies USER_UPDATED" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return({"user" => {"id" => "u1", "aud" => "", "email" => "updated@test.com", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}}})
+      allow(client).to receive(:_save_session)
+      allow(client).to receive(:_notify_all_subscribers)
+
+      client.update_user({email: "updated@test.com"})
+
+      expect(client).to have_received(:_save_session).with(an_object_having_attributes(
+        access_token: "mock-access-token",
+        refresh_token: "mock-refresh-token"
+      ))
+      expect(client).to have_received(:_notify_all_subscribers).with("USER_UPDATED", anything)
+    end
+
+    it "returns UserResponse with updated user" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return({"user" => {"id" => "u1", "aud" => "", "email" => "updated@test.com", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}}})
+      allow(client).to receive(:_save_session)
+      allow(client).to receive(:_notify_all_subscribers)
+
+      result = client.update_user({email: "updated@test.com"})
+      expect(result).to be_a(Supabase::Auth::Types::UserResponse)
+      expect(result.user.email).to eq("updated@test.com")
+    end
+  end
+
+  describe "get_user_identities" do
+    it "wraps get_user and returns IdentitiesResponse" do
+      identity_data = {"identity_id" => "id1", "id" => "id1", "user_id" => "u1", "provider" => "google", "identity_data" => {}, "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "last_sign_in_at" => "2023-01-01T00:00:00Z"}
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return({"user" => {"id" => "u1", "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}, "identities" => [identity_data]}})
+
+      result = client.get_user_identities
+      expect(result).to be_a(Supabase::Auth::Types::IdentitiesResponse)
+      expect(result.identities.length).to eq(1)
+    end
+
+    it "raises AuthSessionMissing when no session" do
+      allow(client).to receive(:get_session).and_return(nil)
+
+      expect {
+        client.get_user_identities
+      }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
+    end
+
+    it "returns empty identities when user has none" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return({"user" => {"id" => "u1", "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}}})
+
+      result = client.get_user_identities
+      expect(result.identities).to eq([])
+    end
+  end
+
+  describe "link_identity" do
+    it "sends GET /user/identities/authorize with provider query params" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return(Supabase::Auth::Types::LinkIdentityResponse.new(url: "https://provider.com/auth"))
+
+      client.link_identity(provider: "google", options: {redirect_to: "https://app.com/callback", scopes: "email profile"})
+
+      expect(client).to have_received(:_request).with("GET", "user/identities/authorize", hash_including(
+        jwt: "mock-access-token"
+      ))
+    end
+
+    it "includes skip_http_redirect=true in params (matching Python)" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      call_args = nil
+      allow(client).to receive(:_request) do |*args, **kwargs|
+        call_args = kwargs
+        Supabase::Auth::Types::LinkIdentityResponse.new(url: "https://provider.com/auth")
+      end
+
+      client.link_identity(provider: "github")
+
+      expect(call_args[:params]).to include("skip_http_redirect" => "true")
+    end
+
+    it "raises AuthSessionMissing when no session" do
+      allow(client).to receive(:get_session).and_return(nil)
+
+      expect {
+        client.link_identity(provider: "google")
+      }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
+    end
+
+    it "returns OAuthResponse with provider and url" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return(Supabase::Auth::Types::LinkIdentityResponse.new(url: "https://auth.example.com/link"))
+
+      result = client.link_identity(provider: "google")
+      expect(result).to be_a(Supabase::Auth::Types::OAuthResponse)
+      expect(result.provider).to eq("google")
+      expect(result.url).to eq("https://auth.example.com/link")
+    end
+  end
+
+  describe "unlink_identity" do
+    it "sends DELETE /user/identities/{identity_id} with session JWT" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return(nil)
+
+      identity = Supabase::Auth::Types::UserIdentity.new(identity_id: "id-123", id: "id-123", user_id: "u1", provider: "google", identity_data: {}, created_at: Time.now, updated_at: Time.now, last_sign_in_at: Time.now)
+      client.unlink_identity(identity)
+
+      expect(client).to have_received(:_request).with("DELETE", "user/identities/id-123", hash_including(jwt: "mock-access-token"))
+    end
+
+    it "accepts hash with identity_id key" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return(nil)
+
+      client.unlink_identity({identity_id: "id-456"})
+
+      expect(client).to have_received(:_request).with("DELETE", "user/identities/id-456", anything)
+    end
+
+    it "raises AuthSessionMissing when no session" do
+      allow(client).to receive(:get_session).and_return(nil)
+
+      expect {
+        client.unlink_identity({identity_id: "id-123"})
+      }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
+    end
+  end
+
+  describe "reset_password_for_email" do
+    it "sends POST /recover with email and captcha_token in body" do
+      allow(client).to receive(:_request)
+
+      client.reset_password_for_email("user@test.com", captcha_token: "cap-token-123")
+
+      expect(client).to have_received(:_request).with("POST", "recover", hash_including(
+        body: {
+          email: "user@test.com",
+          gotrue_meta_security: {captcha_token: "cap-token-123"}
+        }
+      ))
+    end
+
+    it "passes redirect_to as redirect_to parameter" do
+      allow(client).to receive(:_request)
+
+      client.reset_password_for_email("user@test.com", redirect_to: "https://app.com/reset")
+
+      expect(client).to have_received(:_request).with("POST", "recover", hash_including(
+        redirect_to: "https://app.com/reset"
+      ))
+    end
+
+    it "does not require a session (public endpoint, matching Python)" do
+      allow(client).to receive(:_request)
+
+      # Should not call get_session
+      expect(client).not_to receive(:get_session)
+      client.reset_password_for_email("user@test.com")
+    end
+
+    it "sends nil captcha_token when not provided" do
+      allow(client).to receive(:_request)
+
+      client.reset_password_for_email("user@test.com")
+
+      expect(client).to have_received(:_request).with("POST", "recover", hash_including(
+        body: {
+          email: "user@test.com",
+          gotrue_meta_security: {captcha_token: nil}
+        }
+      ))
+    end
+  end
+
+  describe "reauthenticate" do
+    it "sends GET /reauthenticate with session JWT" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return({"access_token" => "t", "refresh_token" => "r", "expires_in" => 3600, "token_type" => "bearer", "user" => {"id" => "u1", "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}}})
+
+      client.reauthenticate
+
+      expect(client).to have_received(:_request).with("GET", "reauthenticate", hash_including(jwt: "mock-access-token"))
+    end
+
+    it "raises AuthSessionMissing when no session" do
+      allow(client).to receive(:get_session).and_return(nil)
+
+      expect {
+        client.reauthenticate
+      }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
+    end
+
+    it "returns AuthResponse" do
+      allow(client).to receive(:get_session).and_return(mock_session)
+      allow(client).to receive(:_request).and_return({"access_token" => "t", "refresh_token" => "r", "expires_in" => 3600, "token_type" => "bearer", "user" => {"id" => "u1", "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {}}})
+
+      result = client.reauthenticate
+      expect(result).to be_a(Supabase::Auth::Types::AuthResponse)
+    end
+  end
 end
