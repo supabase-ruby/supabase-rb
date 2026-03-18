@@ -211,6 +211,26 @@ RSpec.describe "JWT Claims & JWKS" do
         }.to raise_error(Supabase::Auth::Errors::AuthInvalidJwtError, /Invalid JWT signature/)
       end
 
+      it "raises AuthInvalidJwtError when signed with wrong RSA key" do
+        # Sign with one key, provide JWKS from a different key
+        wrong_key = OpenSSL::PKey::RSA.generate(2048)
+        correct_key = OpenSSL::PKey::RSA.generate(2048)
+
+        header = { "alg" => "RS256", "typ" => "JWT", "kid" => "test-key-id" }
+        raw_header = base64url_encode(header)
+        raw_payload = base64url_encode(payload_data)
+        signature = wrong_key.sign("SHA256", "#{raw_header}.#{raw_payload}")
+        raw_sig = Base64.urlsafe_encode64(signature, padding: false)
+        token = "#{raw_header}.#{raw_payload}.#{raw_sig}"
+
+        jwk = JWT::JWK.new(correct_key, kid: "test-key-id")
+        jwks = { "keys" => [jwk.export.transform_keys(&:to_s)] }
+
+        expect {
+          client.get_claims(jwt: token, jwks: jwks)
+        }.to raise_error(Supabase::Auth::Errors::AuthInvalidJwtError, /Invalid JWT signature/)
+      end
+
       it "raises AuthInvalidJwtError for unsupported algorithm" do
         rsa_key = OpenSSL::PKey::RSA.generate(2048)
         header = { "alg" => "UNSUPPORTED", "typ" => "JWT", "kid" => "test-key-id" }
