@@ -569,8 +569,7 @@ module Supabase
           status = 500 if status == 0
           raise Errors::AuthImplicitGrantRedirectError.new(
             params["error_description"],
-            status: status,
-            code: params["error"]
+            details: { error: params["error"], code: error_code }
           )
         end
 
