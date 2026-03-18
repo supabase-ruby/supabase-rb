@@ -397,7 +397,14 @@ module Supabase
 
       def on_auth_state_change(&callback)
         id = SecureRandom.uuid
-        subscription = { id: id, callback: callback }
+
+        unsubscribe = -> { @state_change_emitters.delete(id) }
+
+        subscription = Types::Subscription.new(
+          id: id,
+          callback: callback,
+          unsubscribe: unsubscribe
+        )
         @state_change_emitters[id] = subscription
 
         subscription

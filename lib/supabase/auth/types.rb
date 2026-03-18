@@ -351,6 +351,13 @@ module Supabase
           )
         end
       end
+
+      Subscription = Struct.new(
+        :id,
+        :callback,
+        :unsubscribe,
+        keyword_init: true
+      )
     end
   end
 end
