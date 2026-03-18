@@ -36,7 +36,7 @@ module Supabase
       # @return [Hash, Object] Parsed JSON response, transformed result, or raw response
       def _request(method, path, jwt: nil, body: nil, params: {}, headers: {}, redirect_to: nil, xform: nil, no_resolve_json: false)
         merged_headers = @headers.merge(headers)
-        merged_headers["Content-Type"] = CONTENT_TYPE
+        merged_headers["Content-Type"] ||= CONTENT_TYPE
         merged_headers[Constants::API_VERSION_HEADER_NAME] ||= Constants::API_VERSIONS.keys.last
         merged_headers["Authorization"] = "Bearer #{jwt}" if jwt
 
@@ -50,12 +50,12 @@ module Supabase
           req.params.update(query) unless query.empty?
         end
 
-        return response if no_resolve_json
-
-        result = parse_response(response)
+        result = no_resolve_json ? response : parse_response(response)
 
         xform ? xform.call(result) : result
       rescue Faraday::Error => e
+        raise Helpers.handle_exception(e)
+      rescue StandardError => e
         raise Helpers.handle_exception(e)
       end
 
@@ -93,7 +93,6 @@ module Supabase
 
       def build_connection
         Faraday.new(url: @url) do |f|
-          f.request :json
           f.response :raise_error
           f.adapter Faraday.default_adapter
         end

@@ -191,6 +191,146 @@ RSpec.describe Supabase::Auth::Api do
     end
   end
 
+  describe "API version header" do
+    it "sends X-Supabase-Api-Version header with value '2024-01-01'" do
+      stub_request(:get, "#{base_url}/user")
+        .with(headers: { "X-Supabase-Api-Version" => "2024-01-01" })
+        .to_return(status: 200, body: '{}', headers: { "Content-Type" => "application/json" })
+
+      api.get("/user")
+    end
+
+    it "does not override an explicitly provided API version header" do
+      stub_request(:get, "#{base_url}/user")
+        .with(headers: { "X-Supabase-Api-Version" => "2025-01-01" })
+        .to_return(status: 200, body: '{}', headers: { "Content-Type" => "application/json" })
+
+      api._request(:get, "/user", headers: { "X-Supabase-Api-Version" => "2025-01-01" })
+    end
+  end
+
+  describe "Authorization header via jwt parameter" do
+    it "adds Bearer token when jwt is provided" do
+      stub_request(:get, "#{base_url}/user")
+        .with(headers: { "Authorization" => "Bearer my-jwt-token" })
+        .to_return(status: 200, body: '{"id":"123"}', headers: { "Content-Type" => "application/json" })
+
+      api._request(:get, "/user", jwt: "my-jwt-token")
+    end
+
+    it "does not add Authorization header when jwt is nil" do
+      stub_request(:get, "#{base_url}/user")
+        .to_return(status: 200, body: '{}', headers: { "Content-Type" => "application/json" })
+
+      api._request(:get, "/user")
+      expect(WebMock).to have_requested(:get, "#{base_url}/user")
+        .with { |req| !req.headers.key?("Authorization") }
+    end
+  end
+
+  describe "no_resolve_json parameter" do
+    it "returns raw Faraday::Response when no_resolve_json is true" do
+      stub_request(:post, "#{base_url}/logout")
+        .to_return(status: 204, body: "", headers: {})
+
+      result = api._request(:post, "/logout", body: {}, no_resolve_json: true)
+      expect(result).to be_a(Faraday::Response)
+      expect(result.status).to eq(204)
+    end
+
+    it "returns parsed JSON when no_resolve_json is false (default)" do
+      stub_request(:get, "#{base_url}/user")
+        .to_return(status: 200, body: '{"id":"abc"}', headers: { "Content-Type" => "application/json" })
+
+      result = api._request(:get, "/user")
+      expect(result).to eq({ "id" => "abc" })
+    end
+  end
+
+  describe "redirect_to query parameter" do
+    it "appends redirect_to as a query parameter" do
+      stub_request(:post, "#{base_url}/recover")
+        .with(query: { "redirect_to" => "https://example.com/reset" })
+        .to_return(status: 200, body: '{}', headers: { "Content-Type" => "application/json" })
+
+      api._request(:post, "/recover", body: { email: "test@test.com" }, redirect_to: "https://example.com/reset")
+    end
+
+    it "merges redirect_to with existing query params" do
+      stub_request(:post, "#{base_url}/recover")
+        .with(query: { "redirect_to" => "https://example.com/reset", "extra" => "val" })
+        .to_return(status: 200, body: '{}', headers: { "Content-Type" => "application/json" })
+
+      api._request(:post, "/recover", body: {}, params: { "extra" => "val" }, redirect_to: "https://example.com/reset")
+    end
+  end
+
+  describe "xform callback" do
+    it "applies xform to parsed JSON result" do
+      stub_request(:get, "#{base_url}/user")
+        .to_return(status: 200, body: '{"id":"123","email":"test@test.com"}', headers: { "Content-Type" => "application/json" })
+
+      result = api._request(:get, "/user", xform: ->(data) { data["email"] })
+      expect(result).to eq("test@test.com")
+    end
+
+    it "applies xform to raw response when no_resolve_json is true" do
+      stub_request(:post, "#{base_url}/logout")
+        .to_return(status: 204, body: "", headers: {})
+
+      result = api._request(:post, "/logout", body: {}, no_resolve_json: true, xform: ->(resp) { resp.status })
+      expect(result).to eq(204)
+    end
+  end
+
+  describe "retryable error handling (502/503/504)" do
+    it "raises AuthRetryableError on 503 Service Unavailable" do
+      stub_request(:get, "#{base_url}/user")
+        .to_return(status: 503, body: "Service Unavailable", headers: { "Content-Type" => "text/html" })
+
+      expect { api.get("/user") }.to raise_error(Supabase::Auth::Errors::AuthRetryableError) do |e|
+        expect(e.status).to eq(503)
+      end
+    end
+
+    it "raises AuthRetryableError on 504 Gateway Timeout" do
+      stub_request(:get, "#{base_url}/user")
+        .to_return(status: 504, body: "Gateway Timeout", headers: { "Content-Type" => "text/html" })
+
+      expect { api.get("/user") }.to raise_error(Supabase::Auth::Errors::AuthRetryableError) do |e|
+        expect(e.status).to eq(504)
+      end
+    end
+  end
+
+  describe "retry constants matching Python" do
+    it "has MAX_RETRIES = 10" do
+      expect(Supabase::Auth::Constants::MAX_RETRIES).to eq(10)
+    end
+
+    it "has RETRY_INTERVAL = 2 (deciseconds)" do
+      expect(Supabase::Auth::Constants::RETRY_INTERVAL).to eq(2)
+    end
+  end
+
+  describe "Content-Type header" do
+    it "sets Content-Type to application/json;charset=UTF-8 by default" do
+      stub_request(:post, "#{base_url}/signup")
+        .with(headers: { "Content-Type" => "application/json;charset=UTF-8" })
+        .to_return(status: 200, body: '{}', headers: { "Content-Type" => "application/json" })
+
+      api.post("/signup", body: {})
+    end
+
+    it "does not override an explicitly provided Content-Type" do
+      stub_request(:post, "#{base_url}/signup")
+        .with(headers: { "Content-Type" => "text/plain" })
+        .to_return(status: 200, body: '{}', headers: { "Content-Type" => "application/json" })
+
+      api._request(:post, "/signup", body: {}, headers: { "Content-Type" => "text/plain" })
+    end
+  end
+
   describe "custom http_client" do
     it "uses the injected Faraday client instead of building one" do
       custom_conn = Faraday.new(url: base_url) do |f|
