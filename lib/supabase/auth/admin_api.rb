@@ -4,6 +4,8 @@ require "securerandom"
 
 module Supabase
   module Auth
+    # Admin API for managing users with a service role key.
+    # Provides CRUD operations on users, link generation, and MFA management.
     class AdminApi < Api
       # @param url [String] The GoTrue API base URL
       # @param headers [Hash] Headers including Authorization bearer token
@@ -13,12 +15,17 @@ module Supabase
       end
 
       # Creates a new user via the admin API.
+      # @param attributes [Hash] user attributes (email, password, user_metadata, app_metadata, etc.)
+      # @return [Types::UserResponse]
       def create_user(attributes)
         data = post("admin/users", body: attributes)
         Helpers.parse_user_response(data)
       end
 
       # Lists all users.
+      # @param page [Integer, nil] page number
+      # @param per_page [Integer, nil] users per page
+      # @return [Array<Types::User>]
       def list_users(page: nil, per_page: nil)
         params = {}
         params[:page] = page if page
@@ -29,6 +36,9 @@ module Supabase
       end
 
       # Gets a user by their ID.
+      # @param uid [String] user UUID
+      # @return [Types::UserResponse]
+      # @raise [ArgumentError] if uid is not a valid UUID
       def get_user_by_id(uid)
         _validate_uuid(uid)
         data = get("admin/users/#{uid}")
@@ -36,6 +46,10 @@ module Supabase
       end
 
       # Updates a user by their ID.
+      # @param uid [String] user UUID
+      # @param attributes [Hash] attributes to update
+      # @return [Types::UserResponse]
+      # @raise [ArgumentError] if uid is not a valid UUID
       def update_user_by_id(uid, attributes)
         _validate_uuid(uid)
         data = put("admin/users/#{uid}", body: attributes)
@@ -43,6 +57,9 @@ module Supabase
       end
 
       # Deletes a user by their ID.
+      # @param uid [String] user UUID
+      # @param should_soft_delete [Boolean] soft delete instead of hard delete
+      # @raise [ArgumentError] if uid is not a valid UUID
       def delete_user(uid, should_soft_delete: false)
         _validate_uuid(uid)
         delete("admin/users/#{uid}", params: {})
