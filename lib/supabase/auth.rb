@@ -9,6 +9,7 @@ require_relative "auth/admin_api"
 require_relative "auth/helpers"
 require_relative "auth/storage"
 require_relative "auth/memory_storage"
+require_relative "auth/timer"
 require_relative "auth/client"
 
 module Supabase

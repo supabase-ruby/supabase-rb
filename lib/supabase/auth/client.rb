@@ -36,6 +36,8 @@ module Supabase
         @jwks = { "keys" => [] }
         @jwks_cached_at = nil
         @state_change_emitters = {}
+        @refresh_token_timer = nil
+        @network_retries = 0
 
         @api = Api.new(url: @url, headers: @headers, http_client: @http_client)
         @admin = AdminApi.new(url: @url, headers: @headers, http_client: @http_client)
@@ -483,27 +485,93 @@ module Supabase
         @auto_refresh_token = value
       end
 
-      def _start_auto_refresh_token(seconds = nil)
-        # In Ruby, we don't use a background timer like Python.
-        # This is a no-op that returns nil, matching the Python test expectation.
+      def _start_auto_refresh_token(value = nil)
+        if @refresh_token_timer
+          @refresh_token_timer.cancel
+          @refresh_token_timer = nil
+        end
+
+        return nil if value.nil? || value <= 0 || !@auto_refresh_token
+
+        @refresh_token_timer = Timer.new(value / 1000.0) do
+          @network_retries += 1
+          begin
+            session = get_session
+            if session
+              _call_refresh_token(session.refresh_token)
+              @network_retries = 0
+            end
+          rescue Errors::AuthRetryableError
+            if @network_retries < Constants::MAX_RETRIES
+              _start_auto_refresh_token(Constants::RETRY_INTERVAL ** (@network_retries * 100))
+            end
+          rescue StandardError
+            # Swallow other errors
+          end
+        end
+        @refresh_token_timer.start
         nil
       end
 
       def _recover_and_refresh
-        data_str = @storage.get_item(@storage_key)
-        return unless data_str
+        raw_session = @storage.get_item(@storage_key)
+        current_session = _get_valid_session(raw_session)
 
-        data = JSON.parse(data_str)
-        session = Types::Session.from_hash(data)
-        @current_session = session
-
-        if @auto_refresh_token && session&.refresh_token
-          begin
-            refresh_session(session.refresh_token)
-          rescue Errors::AuthError
-            # Silently fail on refresh errors during recovery
-          end
+        unless current_session
+          _remove_session if raw_session
+          return
         end
+
+        time_now = Time.now.to_i
+        expires_at = current_session.expires_at
+        expires_at = expires_at.to_i if expires_at.is_a?(Time)
+
+        if expires_at && expires_at < time_now + EXPIRY_MARGIN
+          refresh_token = current_session.refresh_token
+          if @auto_refresh_token && refresh_token
+            @network_retries += 1
+            begin
+              _call_refresh_token(refresh_token)
+              @network_retries = 0
+            rescue Errors::AuthRetryableError
+              if @network_retries < Constants::MAX_RETRIES
+                if @refresh_token_timer
+                  @refresh_token_timer.cancel
+                end
+                @refresh_token_timer = Timer.new(
+                  (Constants::RETRY_INTERVAL ** (@network_retries * 100)) / 1000.0
+                ) { _recover_and_refresh }
+                @refresh_token_timer.start
+                return
+              end
+            rescue StandardError
+              # Swallow other errors
+            end
+          end
+          _remove_session
+          return
+        end
+
+        # Session still valid — restore it
+        @current_session = current_session
+      end
+
+      def _call_refresh_token(refresh_token)
+        raise Errors::AuthSessionMissing unless refresh_token && !refresh_token.empty?
+
+        response = _refresh_access_token(refresh_token)
+        raise Errors::AuthSessionMissing unless response.session
+
+        _save_session(response.session)
+        _notify_all_subscribers("TOKEN_REFRESHED", response.session)
+        response.session
+      end
+
+      def _refresh_access_token(refresh_token)
+        data = _request("POST", "token",
+                        body: { refresh_token: refresh_token },
+                        params: { "grant_type" => "refresh_token" })
+        Helpers.parse_auth_response(data)
       end
 
       def _list_factors
@@ -511,13 +579,31 @@ module Supabase
       end
 
       def _remove_session
-        @current_session = nil
-        @storage.remove_item(@storage_key)
+        if @persist_session
+          @storage.remove_item(@storage_key)
+        else
+          @current_session = nil
+        end
+        if @refresh_token_timer
+          @refresh_token_timer.cancel
+          @refresh_token_timer = nil
+        end
       end
 
       def _save_session(session)
+        @current_session = session unless @persist_session
         @current_session = session
-        if @persist_session
+
+        expire_at = session.expires_at
+        if expire_at
+          time_now = Time.now.to_i
+          expire_in = expire_at.is_a?(Time) ? expire_at.to_i - time_now : expire_at - time_now
+          refresh_duration_before_expires = expire_in > EXPIRY_MARGIN ? EXPIRY_MARGIN : 0.5
+          value = (expire_in - refresh_duration_before_expires) * 1000
+          _start_auto_refresh_token(value)
+        end
+
+        if @persist_session && session.expires_at
           @storage.set_item(@storage_key, JSON.generate({
             access_token: session.access_token,
             refresh_token: session.refresh_token,
@@ -540,6 +626,17 @@ module Supabase
       end
 
       private
+
+      def _get_valid_session(raw_session)
+        return nil unless raw_session
+
+        begin
+          data = raw_session.is_a?(String) ? JSON.parse(raw_session) : raw_session
+          Types::Session.from_hash(data)
+        rescue StandardError
+          nil
+        end
+      end
 
       def _get_session_from_url(url)
         parsed = URI.parse(url)
