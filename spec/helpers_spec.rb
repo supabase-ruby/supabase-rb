@@ -88,6 +88,36 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
+    # auth-py: test_handle_exception_network_error (502)
+    it "returns AuthRetryableError for 502 network errors" do
+      stub_request(:get, "http://localhost/hello-world")
+        .to_return(status: 502, body: "Bad Gateway")
+
+      faraday = Faraday.new("http://localhost") { |f| f.response :raise_error }
+      begin
+        faraday.get("/hello-world")
+      rescue Faraday::ServerError => e
+        result = described_class.handle_exception(e)
+        expect(result).to be_a(Supabase::Auth::Errors::AuthRetryableError)
+        expect(result.status).to eq(502)
+      end
+    end
+
+    # auth-py: test_handle_exception_network_error (504)
+    it "returns AuthRetryableError for 504 network errors" do
+      stub_request(:get, "http://localhost/hello-world")
+        .to_return(status: 504, body: "Gateway Timeout")
+
+      faraday = Faraday.new("http://localhost") { |f| f.response :raise_error }
+      begin
+        faraday.get("/hello-world")
+      rescue Faraday::ServerError => e
+        result = described_class.handle_exception(e)
+        expect(result).to be_a(Supabase::Auth::Errors::AuthRetryableError)
+        expect(result.status).to eq(504)
+      end
+    end
+
     # auth-py: test_handle_exception_with_weak_password_attribute
     it "returns AuthApiError when error_code is nil and no weak_password dict" do
       stub_request(:get, "http://localhost/hello-world")
