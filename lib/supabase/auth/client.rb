@@ -582,7 +582,7 @@ module Supabase
 
       # Link an OAuth identity to the current user.
       # @param credentials [Hash] (:provider, optional :options)
-      # @return [Types::OAuthResponse]
+      # @return [Types::LinkIdentityResponse]
       # @raise [Errors::AuthSessionMissing] if no active session
       def link_identity(credentials)
         provider = credentials[:provider] || credentials["provider"]
@@ -600,11 +600,10 @@ module Supabase
         session = get_session
         raise Errors::AuthSessionMissing unless session
 
-        response = _request("GET", url,
-                            params: query,
-                            jwt: session.access_token,
-                            xform: ->(data) { Helpers.parse_link_identity_response(data) })
-        Types::OAuthResponse.new(provider: provider, url: response.url)
+        _request("GET", url,
+                 params: query,
+                 jwt: session.access_token,
+                 xform: ->(data) { Helpers.parse_link_identity_response(data) })
       end
 
       # Unlink an identity from the current user.
