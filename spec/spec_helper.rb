@@ -8,7 +8,7 @@ end
 require "supabase/auth"
 
 # Load all support files
-Dir[File.join(__dir__, "support", "**", "*.rb")].each { |f| require f }
+Dir[File.join(__dir__, "support", "**", "*.rb")].reject { |f| f.end_with?("_spec.rb") }.each { |f| require f }
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|
