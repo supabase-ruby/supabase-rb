@@ -2075,4 +2075,445 @@ RSpec.describe "Request body assertions" do
       expect { admin._delete_factor(user_id: SecureRandom.uuid, id: "bad") }.to raise_error(ArgumentError)
     end
   end
+
+  # ── US-005: Audit MFA API Methods ──────────────────────────────────────────
+
+  describe "MFA enroll" do
+    it "always sends issuer for totp (even nil), matching Python body['issuer'] = params.get('issuer')" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({
+        "id" => "factor-id",
+        "type" => "totp",
+        "friendly_name" => "my-totp",
+        "totp" => { "qr_code" => "<svg>test</svg>", "secret" => "s", "uri" => "otpauth://..." }
+      })
+
+      client.mfa.enroll(factor_type: "totp", friendly_name: "my-totp")
+
+      expect(client).to have_received(:_request) do |_method, _path, **kwargs|
+        # Python always sends issuer (None if absent): body["issuer"] = params.get("issuer")
+        expect(kwargs[:body]).to have_key(:issuer)
+        expect(kwargs[:body][:issuer]).to be_nil
+      end
+    end
+
+    it "sends friendly_name even when nil, matching Python body['friendly_name'] = params.get('friendly_name')" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({
+        "id" => "factor-id",
+        "type" => "totp",
+        "friendly_name" => nil,
+        "totp" => { "qr_code" => "<svg>test</svg>", "secret" => "s", "uri" => "otpauth://..." }
+      })
+
+      client.mfa.enroll(factor_type: "totp")
+
+      expect(client).to have_received(:_request) do |_method, _path, **kwargs|
+        expect(kwargs[:body]).to have_key(:friendly_name)
+        expect(kwargs[:body][:friendly_name]).to be_nil
+      end
+    end
+
+    it "does not include issuer or phone keys for phone factor type (only phone)" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({
+        "id" => "factor-id",
+        "type" => "phone",
+        "friendly_name" => "my-phone"
+      })
+
+      client.mfa.enroll(factor_type: "phone", phone: "+15551234567")
+
+      expect(client).to have_received(:_request) do |_method, _path, **kwargs|
+        expect(kwargs[:body]).not_to have_key(:issuer)
+        expect(kwargs[:body][:phone]).to eq("+15551234567")
+      end
+    end
+
+    it "raises AuthSessionMissing without session, matching Python" do
+      expect { client.mfa.enroll(factor_type: "totp") }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
+    end
+
+    it "prepends data URI to QR code for totp, matching Python f'data:image/svg+xml;utf-8,{...}'" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({
+        "id" => "factor-id",
+        "type" => "totp",
+        "friendly_name" => "my-totp",
+        "totp" => { "qr_code" => "<svg>test</svg>", "secret" => "JBSWY3DPEHPK3PXP", "uri" => "otpauth://totp/MyApp?secret=JBSWY3DPEHPK3PXP" }
+      })
+
+      response = client.mfa.enroll(factor_type: "totp", friendly_name: "my-totp")
+
+      expect(response.totp.qr_code).to eq("data:image/svg+xml;utf-8,<svg>test</svg>")
+    end
+
+    it "does not prepend data URI for phone factor type" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({
+        "id" => "factor-id",
+        "type" => "phone",
+        "friendly_name" => "my-phone",
+        "phone" => "+15551234567"
+      })
+
+      response = client.mfa.enroll(factor_type: "phone", phone: "+15551234567")
+
+      expect(response.totp).to be_nil
+    end
+
+    it "returns AuthMFAEnrollResponse with correct fields" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({
+        "id" => "factor-abc",
+        "type" => "totp",
+        "friendly_name" => "work-totp",
+        "totp" => { "qr_code" => "<svg/>", "secret" => "SECRET", "uri" => "otpauth://totp/test" }
+      })
+
+      response = client.mfa.enroll(factor_type: "totp", friendly_name: "work-totp", issuer: "TestApp")
+
+      expect(response).to be_a(Supabase::Auth::Types::AuthMFAEnrollResponse)
+      expect(response.id).to eq("factor-abc")
+      expect(response.type).to eq("totp")
+      expect(response.friendly_name).to eq("work-totp")
+      expect(response.totp.secret).to eq("SECRET")
+    end
+  end
+
+  describe "MFA challenge" do
+    it "sends channel nil when not provided, matching Python body={'channel': params.get('channel')}" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({
+        "id" => "challenge-id",
+        "type" => "totp",
+        "expires_at" => Time.now.to_i + 300
+      })
+
+      client.mfa.challenge(factor_id: "factor-123")
+
+      expect(client).to have_received(:_request) do |_method, _path, **kwargs|
+        expect(kwargs[:body][:channel]).to be_nil
+      end
+    end
+
+    it "raises AuthSessionMissing without session" do
+      expect { client.mfa.challenge(factor_id: "factor-123") }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
+    end
+
+    it "returns AuthMFAChallengeResponse with factor_type from 'type' field" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({
+        "id" => "chal-id",
+        "type" => "phone",
+        "expires_at" => Time.now.to_i + 300
+      })
+
+      response = client.mfa.challenge(factor_id: "f-id")
+
+      expect(response).to be_a(Supabase::Auth::Types::AuthMFAChallengeResponse)
+      expect(response.factor_type).to eq("phone")
+    end
+  end
+
+  describe "MFA verify" do
+    it "sends full params as body matching Python body=params (factor_id, challenge_id, code)" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({
+        "access_token" => "new-token",
+        "refresh_token" => "new-refresh",
+        "token_type" => "bearer",
+        "expires_in" => 3600,
+        "expires_at" => Time.now.to_i + 3600,
+        "user" => { "id" => "uid", "app_metadata" => {}, "user_metadata" => {}, "aud" => "aud",
+                     "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z" }
+      })
+
+      client.mfa.verify(factor_id: "f-1", challenge_id: "c-1", code: "123456")
+
+      expect(client).to have_received(:_request) do |method, path, **kwargs|
+        expect(method).to eq("POST")
+        expect(path).to eq("factors/f-1/verify")
+        expect(kwargs[:body][:factor_id]).to eq("f-1")
+        expect(kwargs[:body][:challenge_id]).to eq("c-1")
+        expect(kwargs[:body][:code]).to eq("123456")
+      end
+    end
+
+    it "saves session and notifies MFA_CHALLENGE_VERIFIED, matching Python" do
+      setup_session(client, mock_session)
+      events = []
+      client.on_auth_state_change { |event, session| events << event }
+
+      allow(client).to receive(:_request).and_return({
+        "access_token" => "mfa-token",
+        "refresh_token" => "mfa-refresh",
+        "token_type" => "bearer",
+        "expires_in" => 3600,
+        "expires_at" => Time.now.to_i + 3600,
+        "user" => { "id" => "uid", "app_metadata" => {}, "user_metadata" => {}, "aud" => "aud",
+                     "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z" }
+      })
+
+      client.mfa.verify(factor_id: "f-1", challenge_id: "c-1", code: "123456")
+
+      expect(events).to include("MFA_CHALLENGE_VERIFIED")
+    end
+
+    it "raises AuthSessionMissing without session" do
+      expect { client.mfa.verify(factor_id: "f", challenge_id: "c", code: "000000") }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
+    end
+
+    it "returns AuthMFAVerifyResponse" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({
+        "access_token" => "new-token",
+        "refresh_token" => "new-refresh",
+        "token_type" => "bearer",
+        "expires_in" => 3600,
+        "expires_at" => Time.now.to_i + 3600,
+        "user" => { "id" => "uid", "app_metadata" => {}, "user_metadata" => {}, "aud" => "aud",
+                     "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z" }
+      })
+
+      response = client.mfa.verify(factor_id: "f-1", challenge_id: "c-1", code: "123456")
+
+      expect(response).to be_a(Supabase::Auth::Types::AuthMFAVerifyResponse)
+      expect(response.access_token).to eq("new-token")
+    end
+  end
+
+  describe "MFA challenge_and_verify" do
+    it "chains challenge + verify matching Python pattern" do
+      setup_session(client, mock_session)
+      call_count = 0
+      allow(client).to receive(:_request) do |method, path, **kwargs|
+        call_count += 1
+        if path.end_with?("/challenge")
+          { "id" => "chal-id", "type" => "totp", "expires_at" => Time.now.to_i + 300 }
+        else
+          { "access_token" => "t", "refresh_token" => "r", "token_type" => "bearer",
+            "expires_in" => 3600, "expires_at" => Time.now.to_i + 3600,
+            "user" => { "id" => "uid", "app_metadata" => {}, "user_metadata" => {}, "aud" => "aud",
+                         "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z" } }
+        end
+      end
+
+      response = client.mfa.challenge_and_verify(factor_id: "f-1", code: "123456")
+
+      expect(call_count).to eq(2)
+      expect(response).to be_a(Supabase::Auth::Types::AuthMFAVerifyResponse)
+    end
+
+    it "passes challenge_id from challenge response to verify, matching Python" do
+      setup_session(client, mock_session)
+      verify_body = nil
+      allow(client).to receive(:_request) do |method, path, **kwargs|
+        if path.end_with?("/challenge")
+          { "id" => "generated-challenge-id", "type" => "totp", "expires_at" => Time.now.to_i + 300 }
+        else
+          verify_body = kwargs[:body]
+          { "access_token" => "t", "refresh_token" => "r", "token_type" => "bearer",
+            "expires_in" => 3600, "expires_at" => Time.now.to_i + 3600,
+            "user" => { "id" => "uid", "app_metadata" => {}, "user_metadata" => {}, "aud" => "aud",
+                         "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z" } }
+        end
+      end
+
+      client.mfa.challenge_and_verify(factor_id: "f-1", code: "654321")
+
+      expect(verify_body[:challenge_id]).to eq("generated-challenge-id")
+      expect(verify_body[:code]).to eq("654321")
+    end
+  end
+
+  describe "MFA unenroll" do
+    it "sends DELETE to factors/{factor_id} with session JWT, matching Python" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({ "id" => "factor-123" })
+
+      client.mfa.unenroll(factor_id: "factor-123")
+
+      expect(client).to have_received(:_request) do |method, path, **kwargs|
+        expect(method).to eq("DELETE")
+        expect(path).to eq("factors/factor-123")
+        expect(kwargs[:jwt]).to eq("mock-access-token")
+      end
+    end
+
+    it "raises AuthSessionMissing without session" do
+      expect { client.mfa.unenroll(factor_id: "f") }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
+    end
+
+    it "returns AuthMFAUnenrollResponse" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:_request).and_return({ "id" => "factor-xyz" })
+
+      response = client.mfa.unenroll(factor_id: "factor-xyz")
+
+      expect(response).to be_a(Supabase::Auth::Types::AuthMFAUnenrollResponse)
+      expect(response.id).to eq("factor-xyz")
+    end
+  end
+
+  describe "MFA list_factors" do
+    it "calls get_user without JWT (no explicit access_token), matching Python self.get_user()" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:get_user).and_return(
+        Supabase::Auth::Types::UserResponse.new(
+          user: Supabase::Auth::Types::User.new(
+            id: "uid", aud: "aud", app_metadata: {}, user_metadata: {},
+            created_at: Time.now, updated_at: Time.now,
+            factors: [
+              Supabase::Auth::Types::Factor.new(id: "f1", factor_type: "totp", status: "verified"),
+              Supabase::Auth::Types::Factor.new(id: "f2", factor_type: "phone", status: "verified"),
+              Supabase::Auth::Types::Factor.new(id: "f3", factor_type: "totp", status: "unverified")
+            ]
+          )
+        )
+      )
+
+      response = client.mfa.list_factors
+
+      # Must call get_user() with no arguments (matching Python)
+      expect(client).to have_received(:get_user).with(no_args)
+
+      expect(response).to be_a(Supabase::Auth::Types::AuthMFAListFactorsResponse)
+      expect(response.all.length).to eq(3)
+      expect(response.totp.length).to eq(1)
+      expect(response.totp.first.id).to eq("f1")
+      expect(response.phone.length).to eq(1)
+      expect(response.phone.first.id).to eq("f2")
+    end
+
+    it "filters only verified factors for totp and phone, matching Python list comprehension" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:get_user).and_return(
+        Supabase::Auth::Types::UserResponse.new(
+          user: Supabase::Auth::Types::User.new(
+            id: "uid", aud: "aud", app_metadata: {}, user_metadata: {},
+            created_at: Time.now, updated_at: Time.now,
+            factors: [
+              Supabase::Auth::Types::Factor.new(id: "f1", factor_type: "totp", status: "unverified"),
+              Supabase::Auth::Types::Factor.new(id: "f2", factor_type: "phone", status: "unverified")
+            ]
+          )
+        )
+      )
+
+      response = client.mfa.list_factors
+
+      expect(response.all.length).to eq(2)
+      expect(response.totp).to be_empty
+      expect(response.phone).to be_empty
+    end
+
+    it "handles nil factors, matching Python 'response.user.factors or []'" do
+      setup_session(client, mock_session)
+      allow(client).to receive(:get_user).and_return(
+        Supabase::Auth::Types::UserResponse.new(
+          user: Supabase::Auth::Types::User.new(
+            id: "uid", aud: "aud", app_metadata: {}, user_metadata: {},
+            created_at: Time.now, updated_at: Time.now,
+            factors: nil
+          )
+        )
+      )
+
+      response = client.mfa.list_factors
+
+      expect(response.all).to eq([])
+      expect(response.totp).to eq([])
+      expect(response.phone).to eq([])
+    end
+  end
+
+  describe "MFA get_authenticator_assurance_level" do
+    it "returns nil levels with empty methods when no session, matching Python" do
+      response = client.mfa.get_authenticator_assurance_level
+
+      expect(response.current_level).to be_nil
+      expect(response.next_level).to be_nil
+      expect(response.current_authentication_methods).to eq([])
+    end
+
+    it "parses AAL and AMR from JWT payload, matching Python decode_jwt" do
+      # Create a JWT with aal and amr claims
+      payload = { "aal" => "aal1", "amr" => [{ "method" => "password", "timestamp" => Time.now.to_i }],
+                  "sub" => "user-id", "exp" => Time.now.to_i + 3600 }
+      jwt = JWT.encode(payload, "test-secret", "HS256")
+
+      session_with_jwt = Supabase::Auth::Types::Session.new(
+        access_token: jwt,
+        refresh_token: "refresh",
+        expires_in: 3600,
+        expires_at: Time.now.to_i + 3600,
+        token_type: "bearer",
+        user: mock_user
+      )
+      setup_session(client, session_with_jwt)
+
+      response = client.mfa.get_authenticator_assurance_level
+
+      expect(response.current_level).to eq("aal1")
+      expect(response.current_authentication_methods.length).to eq(1)
+      expect(response.current_authentication_methods.first["method"]).to eq("password")
+    end
+
+    it "sets next_level to aal2 when verified factors exist, matching Python" do
+      payload = { "aal" => "aal1", "amr" => [], "sub" => "user-id", "exp" => Time.now.to_i + 3600 }
+      jwt = JWT.encode(payload, "test-secret", "HS256")
+
+      user_with_factors = Supabase::Auth::Types::User.new(
+        id: "uid", aud: "aud", app_metadata: {}, user_metadata: {},
+        created_at: Time.now, updated_at: Time.now,
+        factors: [
+          Supabase::Auth::Types::Factor.new(id: "f1", factor_type: "totp", status: "verified")
+        ]
+      )
+      session_with_factors = Supabase::Auth::Types::Session.new(
+        access_token: jwt, refresh_token: "r", expires_in: 3600,
+        expires_at: Time.now.to_i + 3600, token_type: "bearer", user: user_with_factors
+      )
+      setup_session(client, session_with_factors)
+
+      response = client.mfa.get_authenticator_assurance_level
+
+      expect(response.next_level).to eq("aal2")
+    end
+
+    it "sets next_level to current AAL when no verified factors, matching Python" do
+      payload = { "aal" => "aal1", "amr" => [], "sub" => "user-id", "exp" => Time.now.to_i + 3600 }
+      jwt = JWT.encode(payload, "test-secret", "HS256")
+
+      session = Supabase::Auth::Types::Session.new(
+        access_token: jwt, refresh_token: "r", expires_in: 3600,
+        expires_at: Time.now.to_i + 3600, token_type: "bearer",
+        user: Supabase::Auth::Types::User.new(
+          id: "uid", aud: "aud", app_metadata: {}, user_metadata: {},
+          created_at: Time.now, updated_at: Time.now, factors: []
+        )
+      )
+      setup_session(client, session)
+
+      response = client.mfa.get_authenticator_assurance_level
+
+      expect(response.next_level).to eq("aal1")
+    end
+
+    it "handles nil amr in JWT, matching Python payload.get('amr') or []" do
+      payload = { "aal" => "aal1", "sub" => "user-id", "exp" => Time.now.to_i + 3600 }
+      jwt = JWT.encode(payload, "test-secret", "HS256")
+
+      session = Supabase::Auth::Types::Session.new(
+        access_token: jwt, refresh_token: "r", expires_in: 3600,
+        expires_at: Time.now.to_i + 3600, token_type: "bearer", user: mock_user
+      )
+      setup_session(client, session)
+
+      response = client.mfa.get_authenticator_assurance_level
+
+      expect(response.current_authentication_methods).to eq([])
+    end
+  end
 end
