@@ -52,6 +52,20 @@ module Supabase
         end
       end
 
+      # Raised for retryable errors (network issues, 502/503/504).
+      class AuthRetryableError < AuthError
+        def initialize(message, status: 0)
+          super(message, status: status)
+        end
+      end
+
+      # Raised when credentials are missing or invalid.
+      class AuthInvalidCredentialsError < AuthError
+        def initialize(message)
+          super(message, status: 400, code: "invalid_credentials")
+        end
+      end
+
       # Raised for unexpected or unrecognized errors.
       class AuthUnknownError < AuthError
         attr_reader :original_error

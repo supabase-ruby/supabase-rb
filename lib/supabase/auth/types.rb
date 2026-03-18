@@ -153,6 +153,71 @@ module Supabase
         :url,
         keyword_init: true
       )
+
+      GenerateLinkProperties = Struct.new(
+        :action_link,
+        :email_otp,
+        :hashed_token,
+        :redirect_to,
+        :verification_type,
+        keyword_init: true
+      )
+
+      GenerateLinkResponse = Struct.new(
+        :properties,
+        :user,
+        keyword_init: true
+      )
+
+      UserResponse = Struct.new(
+        :user,
+        keyword_init: true
+      ) do
+        def self.from_hash(hash)
+          return nil if hash.nil?
+
+          new(user: User.from_hash(hash["user"] || hash[:user]))
+        end
+      end
+
+      SSOResponse = Struct.new(
+        :url,
+        keyword_init: true
+      ) do
+        def self.from_hash(hash)
+          return nil if hash.nil?
+
+          new(url: hash["url"] || hash[:url])
+        end
+      end
+
+      LinkIdentityResponse = Struct.new(
+        :url,
+        keyword_init: true
+      ) do
+        def self.from_hash(hash)
+          return nil if hash.nil?
+
+          new(url: hash["url"] || hash[:url])
+        end
+      end
+
+      AuthOtpResponse = Struct.new(
+        :message_id,
+        :user,
+        :session,
+        keyword_init: true
+      ) do
+        def self.from_hash(hash)
+          return nil if hash.nil?
+
+          new(
+            message_id: hash["message_id"] || hash[:message_id],
+            user: hash.key?("user") || hash.key?(:user) ? User.from_hash(hash["user"] || hash[:user]) : nil,
+            session: hash.key?("session") || hash.key?(:session) ? Session.from_hash(hash["session"] || hash[:session]) : nil
+          )
+        end
+      end
     end
   end
 end
