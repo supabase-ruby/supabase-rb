@@ -2517,6 +2517,46 @@ RSpec.describe "Request body assertions" do
       expect(verify_body[:challenge_id]).to eq("generated-challenge-id")
       expect(verify_body[:code]).to eq("654321")
     end
+
+    it "forwards channel parameter to challenge for phone factors" do
+      setup_session(client, mock_session)
+      challenge_body = nil
+      allow(client).to receive(:_request) do |method, path, **kwargs|
+        if path.end_with?("/challenge")
+          challenge_body = kwargs[:body]
+          { "id" => "chal-id", "type" => "phone", "expires_at" => Time.now.to_i + 300 }
+        else
+          { "access_token" => "t", "refresh_token" => "r", "token_type" => "bearer",
+            "expires_in" => 3600, "expires_at" => Time.now.to_i + 3600,
+            "user" => { "id" => "uid", "app_metadata" => {}, "user_metadata" => {}, "aud" => "aud",
+                         "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z" } }
+        end
+      end
+
+      client.mfa.challenge_and_verify(factor_id: "f-1", code: "123456", channel: "whatsapp")
+
+      expect(challenge_body[:channel]).to eq("whatsapp")
+    end
+
+    it "passes nil channel when not provided, leaving behavior unchanged" do
+      setup_session(client, mock_session)
+      challenge_body = nil
+      allow(client).to receive(:_request) do |method, path, **kwargs|
+        if path.end_with?("/challenge")
+          challenge_body = kwargs[:body]
+          { "id" => "chal-id", "type" => "totp", "expires_at" => Time.now.to_i + 300 }
+        else
+          { "access_token" => "t", "refresh_token" => "r", "token_type" => "bearer",
+            "expires_in" => 3600, "expires_at" => Time.now.to_i + 3600,
+            "user" => { "id" => "uid", "app_metadata" => {}, "user_metadata" => {}, "aud" => "aud",
+                         "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z" } }
+        end
+      end
+
+      client.mfa.challenge_and_verify(factor_id: "f-1", code: "123456")
+
+      expect(challenge_body[:channel]).to be_nil
+    end
   end
 
   describe "MFA unenroll" do

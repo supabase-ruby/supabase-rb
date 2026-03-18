@@ -1132,11 +1132,12 @@ module Supabase
       end
 
       # Challenge and verify in one step.
-      # @param params [Hash] (:factor_id, :code)
+      # @param params [Hash] (:factor_id, :code, :channel)
       # @return [Types::AuthMFAVerifyResponse]
       def challenge_and_verify(params)
         challenge_response = challenge(
-          factor_id: params[:factor_id] || params["factor_id"]
+          factor_id: params[:factor_id] || params["factor_id"],
+          channel: params[:channel] || params["channel"]
         )
         verify(
           factor_id: params[:factor_id] || params["factor_id"],
