@@ -29,7 +29,7 @@ RSpec.describe Supabase::Auth::Client do
 
       claims = client.get_claims["claims"]
       expect(claims["email"]).to eq(user.email)
-      expect(client).to have_received(:get_user).at_least(:once)
+      expect(client).to have_received(:get_user).once
     end
   end
 
@@ -46,7 +46,7 @@ RSpec.describe Supabase::Auth::Client do
       claims = client.get_claims["claims"]
       expect(claims["email"]).to eq(user.email)
 
-      expect(client).to have_received(:_request).with("GET", ".well-known/jwks.json", hash_including(:xform))
+      expect(client).to have_received(:_request).with("GET", ".well-known/jwks.json", hash_including(:xform)).once
 
       expected_keyid = "638c54b8-28c2-4b12-9598-ba12ef610a29"
       expect(client._jwks["keys"].length).to eq(1)
@@ -431,6 +431,13 @@ RSpec.describe Supabase::Auth::Client do
         "user/identities/identity-id-1",
         jwt: signup_response.session.access_token
       )
+
+      # Test error case: no session → raises AuthSessionMissingError
+      allow(client).to receive(:get_session).and_return(nil)
+
+      expect {
+        client.unlink_identity(mock_identity)
+      }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
     end
   end
 

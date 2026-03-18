@@ -155,14 +155,18 @@ RSpec.describe Supabase::Auth::Helpers do
       begin
         faraday.get("/hello-world")
       rescue Faraday::ServerError => e
-        # handle_exception should still return an AuthApiError since parse_error_body returns {}
         result = described_class.handle_exception(e)
-        expect(result).to be_a(Supabase::Auth::Errors::AuthApiError)
+        expect(result).to be_a(Supabase::Auth::Errors::AuthUnknownError)
+        expect(result.message).to include("Server error").or include("the server responded with status 500")
       end
     end
 
     # auth-py: test_handle_exception_weak_password_branch
-    it "returns AuthWeakPassword when weak_password dict is present without error_code" do
+    # Python test monkey-patches isinstance to make weak_password appear as both dict and list,
+    # testing an otherwise unreachable branch. In Ruby, we test the same code path by providing
+    # a weak_password dict with reasons — the implementation should detect "weak_password" in
+    # the response and return AuthWeakPasswordError regardless of error_code presence.
+    it "returns AuthWeakPassword when weak_password dict has reasons (branch coverage)" do
       stub_request(:get, "http://localhost/hello-world")
         .to_return(status: 400,
                    body: '{"message":"Password too weak","weak_password":{"reasons":["Password too short"]}}',
@@ -176,6 +180,7 @@ RSpec.describe Supabase::Auth::Helpers do
         expect(result).to be_a(Supabase::Auth::Errors::AuthWeakPassword)
         expect(result.message).to eq("Password too weak")
         expect(result.status).to eq(400)
+        expect(result.reasons).to eq(["Password too short"])
       end
     end
   end

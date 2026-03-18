@@ -487,24 +487,32 @@ RSpec.describe "Admin API Spec" do
   end
 
   # auth-py: test_weak_email_password_error (test_gotrue_admin_api.py:570)
+  # Python catches (AuthWeakPasswordError, AuthApiError) — both are subclasses of AuthError
   it "raises weak password error for email signup with short password" do
     credentials = mock_user_credentials
-    expect {
+    begin
       client_api_auto_confirm_off_signups_enabled_client.sign_up(
         email: credentials[:email],
         password: "123"
       )
-    }.to raise_error(Supabase::Auth::Errors::AuthError)
+      raise "Expected AuthWeakPasswordError or AuthApiError"
+    rescue Supabase::Auth::Errors::AuthWeakPassword, Supabase::Auth::Errors::AuthApiError => e
+      expect(e.to_h).to be_a(Hash)
+    end
   end
 
   # auth-py: test_weak_phone_password_error (test_gotrue_admin_api.py:583)
+  # Python catches (AuthWeakPasswordError, AuthApiError) — both are subclasses of AuthError
   it "raises weak password error for phone signup with short password" do
     credentials = mock_user_credentials
-    expect {
+    begin
       client_api_auto_confirm_off_signups_enabled_client.sign_up(
         phone: credentials[:phone],
         password: "123"
       )
-    }.to raise_error(Supabase::Auth::Errors::AuthError)
+      raise "Expected AuthWeakPasswordError or AuthApiError"
+    rescue Supabase::Auth::Errors::AuthWeakPassword, Supabase::Auth::Errors::AuthApiError => e
+      expect(e.to_h).to be_a(Hash)
+    end
   end
 end

@@ -104,7 +104,7 @@ module Supabase
             return Errors::AuthRetryableError.new(exception.message, status: status)
           end
 
-          data = parse_error_body(response[:body])
+          data = JSON.parse(response[:body] || "{}")
           error_code = nil
           response_api_version = nil
 

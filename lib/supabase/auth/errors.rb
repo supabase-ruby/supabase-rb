@@ -12,6 +12,10 @@ module Supabase
           @status = status
           @code = code
         end
+
+        def to_h
+          { message: message, status: @status, code: @code }
+        end
       end
 
       # Raised for GoTrue server API errors (4xx/5xx responses).
