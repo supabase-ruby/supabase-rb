@@ -62,7 +62,7 @@ module Supabase
       # @raise [ArgumentError] if uid is not a valid UUID
       def delete_user(uid, should_soft_delete: false)
         _validate_uuid(uid)
-        delete("admin/users/#{uid}", params: {})
+        _request("DELETE", "admin/users/#{uid}", body: { should_soft_delete: should_soft_delete })
       end
 
       # Generates email links and OTPs.
@@ -74,7 +74,7 @@ module Supabase
           password: params[:password] || params["password"],
           new_email: params[:new_email] || params["new_email"],
           data: options[:data] || options["data"]
-        }.compact
+        }
         redirect_to = options[:redirect_to] || options["redirect_to"]
         query = {}
         query["redirect_to"] = redirect_to if redirect_to
@@ -94,24 +94,29 @@ module Supabase
 
       # Signs out a user by revoking their session via the admin API.
       def sign_out(access_token, scope = "global")
-        post("logout", body: {}, headers: { "Authorization" => "Bearer #{access_token}" }, params: { "scope" => scope })
+        _request("POST", "logout", jwt: access_token, params: { "scope" => scope }, no_resolve_json: true)
       end
 
       # Lists MFA factors for a user (admin).
+      # @param params [Hash] :user_id (required)
+      # @return [Types::AuthMFAAdminListFactorsResponse]
       def _list_factors(params)
         user_id = params[:user_id] || params["user_id"]
         _validate_uuid(user_id)
         data = get("admin/users/#{user_id}/factors")
-        data
+        Types::AuthMFAAdminListFactorsResponse.from_hash(data)
       end
 
       # Deletes an MFA factor for a user (admin).
+      # @param params [Hash] :user_id and :id (both required)
+      # @return [Types::AuthMFAAdminDeleteFactorResponse]
       def _delete_factor(params)
         user_id = params[:user_id] || params["user_id"]
         factor_id = params[:id] || params["id"]
         _validate_uuid(user_id)
         _validate_uuid(factor_id)
-        delete("admin/users/#{user_id}/factors/#{factor_id}")
+        data = delete("admin/users/#{user_id}/factors/#{factor_id}")
+        Types::AuthMFAAdminDeleteFactorResponse.from_hash(data)
       end
     end
   end

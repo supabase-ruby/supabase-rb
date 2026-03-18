@@ -1662,4 +1662,417 @@ RSpec.describe "Request body assertions" do
       expect(result).to be_a(Supabase::Auth::Types::AuthResponse)
     end
   end
+
+  # ===== US-004: Admin API Method Audit =====
+  # Verifies all AdminApi methods match Python auth-py's SyncGoTrueAdminAPI
+
+  describe "AdminApi#create_user" do
+    let(:admin) do
+      Supabase::Auth::AdminApi.new(
+        url: "http://localhost:9998",
+        headers: { "Authorization" => "Bearer service-role-jwt" }
+      )
+    end
+
+    it "sends POST to admin/users with AdminUserAttributes body" do
+      allow(admin).to receive(:_request).and_return({ "id" => "u1", "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {} })
+
+      admin.create_user(email: "new@test.com", password: "secret", user_metadata: { "name" => "Test" })
+
+      expect(admin).to have_received(:_request) do |method, path, **kwargs|
+        expect(method).to eq(:post)
+        expect(path).to eq("admin/users")
+        expect(kwargs[:body]).to eq(email: "new@test.com", password: "secret", user_metadata: { "name" => "Test" })
+      end
+    end
+
+    it "returns UserResponse" do
+      allow(admin).to receive(:_request).and_return({ "id" => "u1", "aud" => "", "email" => "new@test.com", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {} })
+
+      result = admin.create_user(email: "new@test.com", password: "secret")
+      expect(result).to be_a(Supabase::Auth::Types::UserResponse)
+      expect(result.user.email).to eq("new@test.com")
+    end
+  end
+
+  describe "AdminApi#list_users" do
+    let(:admin) do
+      Supabase::Auth::AdminApi.new(
+        url: "http://localhost:9998",
+        headers: { "Authorization" => "Bearer service-role-jwt" }
+      )
+    end
+
+    it "sends GET to admin/users with page/per_page query params" do
+      allow(admin).to receive(:_request).and_return({ "users" => [] })
+
+      admin.list_users(page: 2, per_page: 10)
+
+      expect(admin).to have_received(:_request) do |method, path, **kwargs|
+        expect(method).to eq(:get)
+        expect(path).to eq("admin/users")
+        expect(kwargs[:params]).to eq(page: 2, per_page: 10)
+      end
+    end
+
+    it "omits nil pagination params (matching Python httpx behavior)" do
+      allow(admin).to receive(:_request).and_return({ "users" => [] })
+
+      admin.list_users
+
+      expect(admin).to have_received(:_request) do |method, path, **kwargs|
+        expect(kwargs[:params]).to eq({})
+      end
+    end
+
+    it "returns array of User objects" do
+      allow(admin).to receive(:_request).and_return({
+        "users" => [
+          { "id" => "u1", "aud" => "", "email" => "a@test.com", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {} }
+        ]
+      })
+
+      result = admin.list_users
+      expect(result).to be_a(Array)
+      expect(result.first).to be_a(Supabase::Auth::Types::User)
+    end
+
+    it "returns empty array when no users key" do
+      allow(admin).to receive(:_request).and_return({})
+
+      result = admin.list_users
+      expect(result).to eq([])
+    end
+  end
+
+  describe "AdminApi#get_user_by_id" do
+    let(:admin) do
+      Supabase::Auth::AdminApi.new(
+        url: "http://localhost:9998",
+        headers: { "Authorization" => "Bearer service-role-jwt" }
+      )
+    end
+
+    it "validates UUID format before making request" do
+      expect { admin.get_user_by_id("not-a-uuid") }.to raise_error(ArgumentError, /not a valid uuid/)
+    end
+
+    it "sends GET to admin/users/{uid}" do
+      uid = SecureRandom.uuid
+      allow(admin).to receive(:_request).and_return({ "id" => uid, "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {} })
+
+      admin.get_user_by_id(uid)
+
+      expect(admin).to have_received(:_request) do |method, path, **_kwargs|
+        expect(method).to eq(:get)
+        expect(path).to eq("admin/users/#{uid}")
+      end
+    end
+
+    it "returns UserResponse" do
+      uid = SecureRandom.uuid
+      allow(admin).to receive(:_request).and_return({ "id" => uid, "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {} })
+
+      result = admin.get_user_by_id(uid)
+      expect(result).to be_a(Supabase::Auth::Types::UserResponse)
+    end
+  end
+
+  describe "AdminApi#update_user_by_id" do
+    let(:admin) do
+      Supabase::Auth::AdminApi.new(
+        url: "http://localhost:9998",
+        headers: { "Authorization" => "Bearer service-role-jwt" }
+      )
+    end
+
+    it "validates UUID and sends PUT to admin/users/{uid}" do
+      uid = SecureRandom.uuid
+      allow(admin).to receive(:_request).and_return({ "id" => uid, "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {} })
+
+      admin.update_user_by_id(uid, email: "updated@test.com", user_metadata: { "key" => "val" })
+
+      expect(admin).to have_received(:_request) do |method, path, **kwargs|
+        expect(method).to eq(:put)
+        expect(path).to eq("admin/users/#{uid}")
+        expect(kwargs[:body]).to eq(email: "updated@test.com", user_metadata: { "key" => "val" })
+      end
+    end
+
+    it "raises ArgumentError for invalid UUID" do
+      expect { admin.update_user_by_id("bad", email: "x@y.com") }.to raise_error(ArgumentError)
+    end
+  end
+
+  describe "AdminApi#delete_user" do
+    let(:admin) do
+      Supabase::Auth::AdminApi.new(
+        url: "http://localhost:9998",
+        headers: { "Authorization" => "Bearer service-role-jwt" }
+      )
+    end
+
+    it "sends DELETE to admin/users/{uid} with should_soft_delete body" do
+      uid = SecureRandom.uuid
+      allow(admin).to receive(:_request).and_return({})
+
+      admin.delete_user(uid, should_soft_delete: true)
+
+      expect(admin).to have_received(:_request) do |method, path, **kwargs|
+        expect(method).to eq("DELETE")
+        expect(path).to eq("admin/users/#{uid}")
+        expect(kwargs[:body]).to eq({ should_soft_delete: true })
+      end
+    end
+
+    it "defaults should_soft_delete to false" do
+      uid = SecureRandom.uuid
+      allow(admin).to receive(:_request).and_return({})
+
+      admin.delete_user(uid)
+
+      expect(admin).to have_received(:_request) do |method, _path, **kwargs|
+        expect(kwargs[:body]).to eq({ should_soft_delete: false })
+      end
+    end
+
+    it "validates UUID" do
+      expect { admin.delete_user("invalid") }.to raise_error(ArgumentError)
+    end
+  end
+
+  describe "AdminApi#invite_user_by_email" do
+    let(:admin) do
+      Supabase::Auth::AdminApi.new(
+        url: "http://localhost:9998",
+        headers: { "Authorization" => "Bearer service-role-jwt" }
+      )
+    end
+
+    it "sends POST to invite with email, data body and redirect_to query param" do
+      allow(admin).to receive(:_request).and_return({ "id" => "u1", "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {} })
+
+      admin.invite_user_by_email("invite@test.com", data: { "role" => "admin" }, redirect_to: "https://app.com/welcome")
+
+      expect(admin).to have_received(:_request) do |method, path, **kwargs|
+        expect(method).to eq(:post)
+        expect(path).to eq("invite")
+        expect(kwargs[:body][:email]).to eq("invite@test.com")
+        expect(kwargs[:body][:data]).to eq({ "role" => "admin" })
+        expect(kwargs[:params]).to eq({ "redirect_to" => "https://app.com/welcome" })
+      end
+    end
+
+    it "sends nil data when no options provided (matching Python options.get('data') -> None)" do
+      allow(admin).to receive(:_request).and_return({ "id" => "u1", "aud" => "", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {} })
+
+      admin.invite_user_by_email("invite@test.com")
+
+      expect(admin).to have_received(:_request) do |method, path, **kwargs|
+        expect(kwargs[:body]).to eq({ email: "invite@test.com", data: nil })
+        expect(kwargs[:params]).to eq({})
+      end
+    end
+
+    it "returns UserResponse" do
+      allow(admin).to receive(:_request).and_return({ "id" => "u1", "aud" => "", "email" => "invite@test.com", "invited_at" => "2023-01-01T00:00:00Z", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z", "app_metadata" => {}, "user_metadata" => {} })
+
+      result = admin.invite_user_by_email("invite@test.com")
+      expect(result).to be_a(Supabase::Auth::Types::UserResponse)
+    end
+  end
+
+  describe "AdminApi#generate_link" do
+    let(:admin) do
+      Supabase::Auth::AdminApi.new(
+        url: "http://localhost:9998",
+        headers: { "Authorization" => "Bearer service-role-jwt" }
+      )
+    end
+
+    it "constructs body for signup link type with all fields" do
+      allow(admin).to receive(:_request).and_return({
+        "id" => "u1", "aud" => "", "email" => "t@t.com", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z",
+        "app_metadata" => {}, "user_metadata" => { "status" => "alpha" },
+        "action_link" => "http://localhost:9998/verify?token=abc", "hashed_token" => "abc", "verification_type" => "signup", "redirect_to" => "http://app.com"
+      })
+
+      admin.generate_link(
+        type: "signup",
+        email: "t@t.com",
+        password: "secret123",
+        options: { data: { "status" => "alpha" }, redirect_to: "http://app.com" }
+      )
+
+      expect(admin).to have_received(:_request) do |method, path, **kwargs|
+        expect(method).to eq(:post)
+        expect(path).to eq("admin/generate_link")
+        body = kwargs[:body]
+        expect(body[:type]).to eq("signup")
+        expect(body[:email]).to eq("t@t.com")
+        expect(body[:password]).to eq("secret123")
+        expect(body[:data]).to eq({ "status" => "alpha" })
+        # Python sends nil/None for new_email — Ruby must NOT compact it away
+        expect(body).to have_key(:new_email)
+        expect(body[:new_email]).to be_nil
+      end
+    end
+
+    it "constructs body for email_change_current with new_email" do
+      allow(admin).to receive(:_request).and_return({
+        "id" => "u1", "aud" => "", "email" => "old@t.com", "new_email" => "new@t.com",
+        "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z",
+        "app_metadata" => {}, "user_metadata" => {},
+        "action_link" => "http://localhost:9998/verify?token=abc", "hashed_token" => "abc", "verification_type" => "email_change_current", "redirect_to" => "http://app.com"
+      })
+
+      admin.generate_link(
+        type: "email_change_current",
+        email: "old@t.com",
+        new_email: "new@t.com",
+        options: { redirect_to: "http://app.com" }
+      )
+
+      expect(admin).to have_received(:_request) do |_method, _path, **kwargs|
+        body = kwargs[:body]
+        expect(body[:type]).to eq("email_change_current")
+        expect(body[:new_email]).to eq("new@t.com")
+        expect(body[:password]).to be_nil
+        expect(body[:data]).to be_nil
+      end
+    end
+
+    it "passes redirect_to as query param" do
+      allow(admin).to receive(:_request).and_return({
+        "id" => "u1", "aud" => "", "email" => "t@t.com", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z",
+        "app_metadata" => {}, "user_metadata" => {},
+        "action_link" => "http://localhost:9998/verify?token=abc", "hashed_token" => "abc", "verification_type" => "signup", "redirect_to" => "http://app.com"
+      })
+
+      admin.generate_link(type: "signup", email: "t@t.com", password: "s", options: { redirect_to: "http://app.com" })
+
+      expect(admin).to have_received(:_request) do |_method, _path, **kwargs|
+        expect(kwargs[:params]).to eq({ "redirect_to" => "http://app.com" })
+      end
+    end
+
+    it "returns GenerateLinkResponse" do
+      allow(admin).to receive(:_request).and_return({
+        "id" => "u1", "aud" => "", "email" => "t@t.com", "created_at" => "2023-01-01T00:00:00Z", "updated_at" => "2023-01-01T00:00:00Z",
+        "app_metadata" => {}, "user_metadata" => {},
+        "action_link" => "http://localhost:9998/verify?token=abc", "hashed_token" => "abc", "verification_type" => "signup", "redirect_to" => "http://app.com"
+      })
+
+      result = admin.generate_link(type: "signup", email: "t@t.com", password: "s")
+      expect(result).to be_a(Supabase::Auth::Types::GenerateLinkResponse)
+    end
+  end
+
+  describe "AdminApi#sign_out" do
+    let(:admin) do
+      Supabase::Auth::AdminApi.new(
+        url: "http://localhost:9998",
+        headers: { "Authorization" => "Bearer service-role-jwt" }
+      )
+    end
+
+    it "sends POST to logout with jwt parameter and scope as query param" do
+      allow(admin).to receive(:_request).and_return(nil)
+
+      admin.sign_out("user-access-token", "local")
+
+      expect(admin).to have_received(:_request) do |method, path, **kwargs|
+        expect(method).to eq("POST")
+        expect(path).to eq("logout")
+        expect(kwargs[:jwt]).to eq("user-access-token")
+        expect(kwargs[:params]).to eq({ "scope" => "local" })
+        expect(kwargs[:no_resolve_json]).to eq(true)
+      end
+    end
+
+    it "defaults scope to global (matching Python SignOutScope default)" do
+      allow(admin).to receive(:_request).and_return(nil)
+
+      admin.sign_out("user-access-token")
+
+      expect(admin).to have_received(:_request) do |_method, _path, **kwargs|
+        expect(kwargs[:params]).to eq({ "scope" => "global" })
+      end
+    end
+
+    it "does NOT send a body (matching Python — no body parameter)" do
+      allow(admin).to receive(:_request).and_return(nil)
+
+      admin.sign_out("tok")
+
+      expect(admin).to have_received(:_request) do |_method, _path, **kwargs|
+        expect(kwargs[:body]).to be_nil
+      end
+    end
+
+    it "uses no_resolve_json: true (matching Python no_resolve_json=True)" do
+      allow(admin).to receive(:_request).and_return(nil)
+
+      admin.sign_out("tok")
+
+      expect(admin).to have_received(:_request) do |_method, _path, **kwargs|
+        expect(kwargs[:no_resolve_json]).to eq(true)
+      end
+    end
+  end
+
+  describe "AdminApi#_list_factors" do
+    let(:admin) do
+      Supabase::Auth::AdminApi.new(
+        url: "http://localhost:9998",
+        headers: { "Authorization" => "Bearer service-role-jwt" }
+      )
+    end
+
+    it "validates user_id UUID and sends GET to admin/users/{user_id}/factors" do
+      uid = SecureRandom.uuid
+      allow(admin).to receive(:_request).and_return({ "factors" => [] })
+
+      admin._list_factors(user_id: uid)
+
+      expect(admin).to have_received(:_request) do |method, path, **_kwargs|
+        expect(method).to eq(:get)
+        expect(path).to eq("admin/users/#{uid}/factors")
+      end
+    end
+
+    it "raises ArgumentError for invalid user_id" do
+      expect { admin._list_factors(user_id: "bad") }.to raise_error(ArgumentError)
+    end
+  end
+
+  describe "AdminApi#_delete_factor" do
+    let(:admin) do
+      Supabase::Auth::AdminApi.new(
+        url: "http://localhost:9998",
+        headers: { "Authorization" => "Bearer service-role-jwt" }
+      )
+    end
+
+    it "validates both user_id and factor_id, sends DELETE to admin/users/{uid}/factors/{fid}" do
+      uid = SecureRandom.uuid
+      fid = SecureRandom.uuid
+      allow(admin).to receive(:_request).and_return({})
+
+      admin._delete_factor(user_id: uid, id: fid)
+
+      expect(admin).to have_received(:_request) do |method, path, **_kwargs|
+        expect(method).to eq(:delete)
+        expect(path).to eq("admin/users/#{uid}/factors/#{fid}")
+      end
+    end
+
+    it "raises ArgumentError for invalid user_id" do
+      expect { admin._delete_factor(user_id: "bad", id: SecureRandom.uuid) }.to raise_error(ArgumentError)
+    end
+
+    it "raises ArgumentError for invalid factor_id" do
+      expect { admin._delete_factor(user_id: SecureRandom.uuid, id: "bad") }.to raise_error(ArgumentError)
+    end
+  end
 end
