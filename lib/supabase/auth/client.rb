@@ -653,7 +653,7 @@ module Supabase
 
       # Get JWT claims from the current session. Validates symmetric JWTs via get_user,
       # asymmetric JWTs via JWKS endpoint.
-      # @return [Hash, nil] hash with "claims" key, or nil if no session
+      # @return [Types::ClaimsResponse, nil] claims response, or nil if no session
       def get_claims(jwt: nil, jwks: nil)
         token = jwt
         unless token
@@ -674,7 +674,7 @@ module Supabase
         # If symmetric algorithm (no kid or HS256), fallback to get_user
         if !header["kid"] || header["alg"] == "HS256"
           get_user(token)
-          return { "claims" => payload, "headers" => header, "signature" => signature }
+          return Types::ClaimsResponse.new(claims: payload, headers: header, signature: signature)
         end
 
         # Asymmetric JWT - verify via JWKS
@@ -687,7 +687,7 @@ module Supabase
         is_valid = signing_key.verify(digest, signature, "#{raw_header}.#{raw_payload}")
         raise Errors::AuthInvalidJwtError, "Invalid JWT signature" unless is_valid
 
-        { "claims" => payload, "headers" => header, "signature" => signature }
+        Types::ClaimsResponse.new(claims: payload, headers: header, signature: signature)
       end
 
       # --- PKCE helpers ---

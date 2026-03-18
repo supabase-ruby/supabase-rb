@@ -422,6 +422,14 @@ module Supabase
         :unsubscribe,
         keyword_init: true
       )
+
+      # JWT Claims response - returned by get_claims (matches Python ClaimsResponse)
+      ClaimsResponse = Struct.new(
+        :claims,
+        :headers,
+        :signature,
+        keyword_init: true
+      )
     end
   end
 end
