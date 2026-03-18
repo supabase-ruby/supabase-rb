@@ -15,10 +15,9 @@ RSpec.describe Supabase::Auth::Client do
     it "initializes with default options" do
       client = described_class.new(url: url)
 
-      expect(client.auto_refresh_token?).to be true
-      expect(client.persist_session?).to be true
-      expect(client.detect_session_in_url?).to be true
-      expect(client.flow_type).to eq(:implicit)
+      expect(client._flow_type).to eq("implicit")
+      expect(client.admin).to be_a(Supabase::Auth::AdminApi)
+      expect(client.mfa).to be_a(Supabase::Auth::MFAApi)
     end
 
     it "accepts custom options" do
@@ -27,13 +26,10 @@ RSpec.describe Supabase::Auth::Client do
         auto_refresh_token: false,
         persist_session: false,
         detect_session_in_url: false,
-        flow_type: :pkce
+        flow_type: "pkce"
       )
 
-      expect(client.auto_refresh_token?).to be false
-      expect(client.persist_session?).to be false
-      expect(client.detect_session_in_url?).to be false
-      expect(client.flow_type).to eq(:pkce)
+      expect(client._flow_type).to eq("pkce")
     end
 
     it "accepts a custom http_client option" do

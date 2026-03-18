@@ -66,6 +66,13 @@ module Supabase
         end
       end
 
+      # Raised when an implicit grant redirect contains an error.
+      class AuthImplicitGrantRedirectError < AuthError
+        def initialize(message, status: 500, code: nil)
+          super(message, status: status, code: code)
+        end
+      end
+
       # Raised for unexpected or unrecognized errors.
       class AuthUnknownError < AuthError
         attr_reader :original_error
@@ -75,6 +82,8 @@ module Supabase
           @original_error = original_error
         end
       end
+      # Alias for AuthSessionMissing (matches Python's AuthSessionMissingError)
+      AuthSessionMissingError = AuthSessionMissing
     end
   end
 end

@@ -218,6 +218,126 @@ module Supabase
           )
         end
       end
+      # MFA Enroll response - returned when enrolling a new TOTP factor
+      AuthMFAEnrollResponse = Struct.new(
+        :id,
+        :type,
+        :friendly_name,
+        :totp,
+        keyword_init: true
+      ) do
+        def self.from_hash(hash)
+          return nil if hash.nil?
+
+          totp = hash["totp"] || hash[:totp]
+          totp_struct = totp ? MFATotpInfo.new(qr_code: totp["qr_code"] || totp[:qr_code],
+                                                secret: totp["secret"] || totp[:secret],
+                                                uri: totp["uri"] || totp[:uri]) : nil
+          new(
+            id: hash["id"] || hash[:id],
+            type: hash["type"] || hash[:type],
+            friendly_name: hash["friendly_name"] || hash[:friendly_name],
+            totp: totp_struct
+          )
+        end
+      end
+
+      MFATotpInfo = Struct.new(:qr_code, :secret, :uri, keyword_init: true)
+
+      # MFA Challenge response
+      AuthMFAChallengeResponse = Struct.new(
+        :id,
+        :expires_at,
+        keyword_init: true
+      ) do
+        def self.from_hash(hash)
+          return nil if hash.nil?
+
+          new(
+            id: hash["id"] || hash[:id],
+            expires_at: hash["expires_at"] || hash[:expires_at]
+          )
+        end
+      end
+
+      # MFA Unenroll response
+      AuthMFAUnenrollResponse = Struct.new(
+        :id,
+        keyword_init: true
+      ) do
+        def self.from_hash(hash)
+          return nil if hash.nil?
+
+          new(id: hash["id"] || hash[:id])
+        end
+      end
+
+      # MFA List Factors response
+      AuthMFAListFactorsResponse = Struct.new(
+        :all,
+        :totp,
+        :phone,
+        keyword_init: true
+      )
+
+      # MFA Verify response
+      AuthMFAVerifyResponse = Struct.new(
+        :access_token,
+        :refresh_token,
+        :token_type,
+        :expires_in,
+        :expires_at,
+        :user,
+        keyword_init: true
+      ) do
+        def self.from_hash(hash)
+          return nil if hash.nil?
+
+          Session.from_hash(hash)
+        end
+      end
+
+      # MFA Get Authenticator Assurance Level response
+      AuthMFAGetAuthenticatorAssuranceLevelResponse = Struct.new(
+        :current_level,
+        :next_level,
+        :current_authentication_methods,
+        keyword_init: true
+      )
+
+      # Identities response (wraps user identities)
+      IdentitiesResponse = Struct.new(
+        :identities,
+        keyword_init: true
+      )
+
+      # User Identity (includes identity_id)
+      UserIdentity = Struct.new(
+        :id,
+        :identity_id,
+        :user_id,
+        :identity_data,
+        :provider,
+        :created_at,
+        :last_sign_in_at,
+        :updated_at,
+        keyword_init: true
+      ) do
+        def self.from_hash(hash)
+          return nil if hash.nil?
+
+          new(
+            id: hash["id"] || hash[:id],
+            identity_id: hash["identity_id"] || hash[:identity_id],
+            user_id: hash["user_id"] || hash[:user_id],
+            identity_data: hash["identity_data"] || hash[:identity_data] || {},
+            provider: hash["provider"] || hash[:provider],
+            created_at: Types.parse_timestamp(hash["created_at"] || hash[:created_at]),
+            last_sign_in_at: Types.parse_timestamp(hash["last_sign_in_at"] || hash[:last_sign_in_at]),
+            updated_at: Types.parse_timestamp(hash["updated_at"] || hash[:updated_at])
+          )
+        end
+      end
     end
   end
 end

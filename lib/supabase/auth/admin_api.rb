@@ -17,6 +17,13 @@ module Supabase
         data = post("admin/users", body: attributes)
         Types::User.from_hash(data)
       end
+
+      # Signs out a user by revoking their session via the admin API.
+      # @param access_token [String] The user's access token
+      # @param scope [String] Sign out scope: "global", "local", or "others"
+      def sign_out(access_token, scope = "global")
+        post("logout", body: {}, headers: { "Authorization" => "Bearer #{access_token}" }, params: { "scope" => scope })
+      end
     end
   end
 end
