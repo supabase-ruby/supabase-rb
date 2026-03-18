@@ -7,6 +7,7 @@ module Supabase
   module Auth
     class Api
       CONTENT_TYPE = "application/json;charset=UTF-8"
+      UUID_REGEX = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
 
       attr_reader :url, :headers
 
@@ -19,38 +20,69 @@ module Supabase
         @http_client = http_client
       end
 
+      # Central HTTP dispatch method. Builds URL, merges headers (including API version
+      # and Authorization), handles redirect_to as query param, parses JSON, applies
+      # optional transform, and maps errors via Helpers.handle_exception.
+      #
+      # @param method [String, Symbol] HTTP method (GET, POST, PUT, DELETE)
       # @param path [String] Request path (relative to base URL)
-      # @param headers [Hash] Additional headers for this request
+      # @param jwt [String, nil] Bearer token for Authorization header
+      # @param body [Hash, nil] Request body (serialized to JSON)
       # @param params [Hash] Query parameters
-      # @return [Hash] Parsed JSON response
+      # @param headers [Hash] Additional headers for this request
+      # @param redirect_to [String, nil] If present, added as redirect_to query param
+      # @param xform [Proc, nil] Optional transform function applied to parsed response
+      # @param no_resolve_json [Boolean] If true, return raw Faraday::Response
+      # @return [Hash, Object] Parsed JSON response, transformed result, or raw response
+      def _request(method, path, jwt: nil, body: nil, params: {}, headers: {}, redirect_to: nil, xform: nil, no_resolve_json: false)
+        merged_headers = @headers.merge(headers)
+        merged_headers["Content-Type"] = CONTENT_TYPE
+        merged_headers[Constants::API_VERSION_HEADER_NAME] ||= Constants::API_VERSIONS.keys.last
+        merged_headers["Authorization"] = "Bearer #{jwt}" if jwt
+
+        query = params.dup
+        query["redirect_to"] = redirect_to if redirect_to
+
+        full_path = build_path(path)
+        json_body = body ? JSON.generate(body) : nil
+
+        response = connection.run_request(method.to_s.downcase.to_sym, full_path, json_body, merged_headers) do |req|
+          req.params.update(query) unless query.empty?
+        end
+
+        return response if no_resolve_json
+
+        result = parse_response(response)
+
+        xform ? xform.call(result) : result
+      rescue Faraday::Error => e
+        raise Helpers.handle_exception(e)
+      end
+
+      # @param id [String] UUID to validate
+      # @raise [ArgumentError] if not a valid UUID format
+      def _validate_uuid(id)
+        unless id.is_a?(String) && id.match?(UUID_REGEX)
+          raise ArgumentError, "Invalid id, '#{id}' is not a valid uuid"
+        end
+      end
+
+      # Convenience methods that delegate to _request
+
       def get(path, headers: {}, params: {})
-        request(:get, path, headers: headers, params: params)
+        _request(:get, path, headers: headers, params: params)
       end
 
-      # @param path [String] Request path (relative to base URL)
-      # @param body [Hash] Request body (will be serialized to JSON)
-      # @param headers [Hash] Additional headers for this request
-      # @param params [Hash] Query parameters
-      # @return [Hash] Parsed JSON response
       def post(path, body: {}, headers: {}, params: {})
-        request(:post, path, body: body, headers: headers, params: params)
+        _request(:post, path, body: body, headers: headers, params: params)
       end
 
-      # @param path [String] Request path (relative to base URL)
-      # @param body [Hash] Request body (will be serialized to JSON)
-      # @param headers [Hash] Additional headers for this request
-      # @param params [Hash] Query parameters
-      # @return [Hash] Parsed JSON response
       def put(path, body: {}, headers: {}, params: {})
-        request(:put, path, body: body, headers: headers, params: params)
+        _request(:put, path, body: body, headers: headers, params: params)
       end
 
-      # @param path [String] Request path (relative to base URL)
-      # @param headers [Hash] Additional headers for this request
-      # @param params [Hash] Query parameters
-      # @return [Hash] Parsed JSON response
       def delete(path, headers: {}, params: {})
-        request(:delete, path, headers: headers, params: params)
+        _request(:delete, path, headers: headers, params: params)
       end
 
       private
@@ -67,19 +99,6 @@ module Supabase
         end
       end
 
-      def request(method, path, body: nil, headers: {}, params: {})
-        merged_headers = @headers.merge("Content-Type" => CONTENT_TYPE).merge(headers)
-        full_path = build_path(path)
-
-        response = connection.run_request(method, full_path, body ? JSON.generate(body) : nil, merged_headers) do |req|
-          req.params.update(params) unless params.empty?
-        end
-
-        parse_response(response)
-      rescue Faraday::ClientError, Faraday::ServerError => e
-        handle_error(e)
-      end
-
       def build_path(path)
         base_path = URI.parse(@url).path.chomp("/")
         "#{base_path}/#{path.sub(%r{^/}, '')}"
@@ -89,25 +108,6 @@ module Supabase
         return {} if response.body.nil? || response.body.empty?
 
         JSON.parse(response.body)
-      rescue JSON::ParserError
-        {}
-      end
-
-      def handle_error(error)
-        response = error.response
-        status = response[:status]
-        body = parse_error_body(response[:body])
-
-        message = body["error_description"] || body["msg"] || body["message"] || error.message
-        code = body["error_code"] || body["error"] || body["code"]
-
-        raise Errors::AuthApiError.new(message, status: status, code: code)
-      end
-
-      def parse_error_body(body)
-        return {} if body.nil? || body.empty?
-
-        JSON.parse(body)
       rescue JSON::ParserError
         {}
       end

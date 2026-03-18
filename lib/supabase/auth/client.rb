@@ -515,49 +515,11 @@ module Supabase
       end
 
       def _request(method, path, jwt: nil, body: nil, params: {}, headers: {}, redirect_to: nil, xform: nil)
-        merged_headers = @headers.merge(headers)
-        merged_headers["Content-Type"] = "application/json;charset=UTF-8"
-        merged_headers["Authorization"] = "Bearer #{jwt}" if jwt
-
-        query = params.dup
-        query["redirect_to"] = redirect_to if redirect_to
-
-        response = _raw_request(method, path, body: body, headers: merged_headers, params: query)
-
-        if xform
-          xform.call(response)
-        else
-          response
-        end
+        @api._request(method, path, jwt: jwt, body: body, params: params, headers: headers,
+                                     redirect_to: redirect_to, xform: xform)
       end
 
       private
-
-      def _raw_request(method, path, body: nil, headers: {}, params: {})
-        conn = @http_client || Faraday.new(url: @url) do |f|
-          f.request :json
-          f.response :raise_error
-          f.adapter Faraday.default_adapter
-        end
-
-        full_path = build_path(path)
-        json_body = body ? JSON.generate(body) : nil
-
-        response = conn.run_request(method.downcase.to_sym, full_path, json_body, headers) do |req|
-          req.params.update(params) unless params.empty?
-        end
-
-        return {} if response.body.nil? || response.body.empty?
-
-        JSON.parse(response.body)
-      rescue Faraday::ClientError, Faraday::ServerError => e
-        raise Helpers.handle_exception(e)
-      end
-
-      def build_path(path)
-        base_path = URI.parse(@url).path.chomp("/")
-        "#{base_path}/#{path.sub(%r{^/}, '')}"
-      end
 
       def _get_session_from_url(url)
         parsed = URI.parse(url)

@@ -105,7 +105,7 @@ RSpec.describe Supabase::Auth::Api do
       stub_request(:post, "#{base_url}/token")
         .to_return(
           status: 400,
-          body: '{"error":"invalid_grant","error_description":"Invalid login credentials"}',
+          body: '{"error":"invalid_grant","error_description":"Invalid login credentials","error_code":"invalid_grant"}',
           headers: { "Content-Type" => "application/json" }
         )
 
@@ -156,22 +156,20 @@ RSpec.describe Supabase::Auth::Api do
       end
     end
 
-    it "handles non-JSON error responses gracefully" do
+    it "raises AuthRetryableError on 502 non-JSON response" do
       stub_request(:get, "#{base_url}/user")
         .to_return(status: 502, body: "Bad Gateway", headers: { "Content-Type" => "text/html" })
 
-      expect { api.get("/user") }.to raise_error(Supabase::Auth::Errors::AuthApiError) do |e|
+      expect { api.get("/user") }.to raise_error(Supabase::Auth::Errors::AuthRetryableError) do |e|
         expect(e.status).to eq(502)
       end
     end
 
-    it "handles empty error response body" do
+    it "raises AuthUnknownError on empty error response body" do
       stub_request(:get, "#{base_url}/user")
         .to_return(status: 404, body: "", headers: {})
 
-      expect { api.get("/user") }.to raise_error(Supabase::Auth::Errors::AuthApiError) do |e|
-        expect(e.status).to eq(404)
-      end
+      expect { api.get("/user") }.to raise_error(Supabase::Auth::Errors::AuthUnknownError)
     end
   end
 

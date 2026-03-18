@@ -5,8 +5,6 @@ require "securerandom"
 module Supabase
   module Auth
     class AdminApi < Api
-      UUID_REGEX = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
-
       # @param url [String] The GoTrue API base URL
       # @param headers [Hash] Headers including Authorization bearer token
       # @param http_client [Faraday::Connection, nil] Optional custom Faraday client
@@ -32,21 +30,21 @@ module Supabase
 
       # Gets a user by their ID.
       def get_user_by_id(uid)
-        validate_uuid!(uid)
+        _validate_uuid(uid)
         data = get("admin/users/#{uid}")
         Helpers.parse_user_response(data)
       end
 
       # Updates a user by their ID.
       def update_user_by_id(uid, attributes)
-        validate_uuid!(uid)
+        _validate_uuid(uid)
         data = put("admin/users/#{uid}", body: attributes)
         Helpers.parse_user_response(data)
       end
 
       # Deletes a user by their ID.
       def delete_user(uid, should_soft_delete: false)
-        validate_uuid!(uid)
+        _validate_uuid(uid)
         delete("admin/users/#{uid}", params: {})
       end
 
@@ -85,7 +83,7 @@ module Supabase
       # Lists MFA factors for a user (admin).
       def _list_factors(params)
         user_id = params[:user_id] || params["user_id"]
-        validate_uuid!(user_id)
+        _validate_uuid(user_id)
         data = get("admin/users/#{user_id}/factors")
         data
       end
@@ -94,17 +92,9 @@ module Supabase
       def _delete_factor(params)
         user_id = params[:user_id] || params["user_id"]
         factor_id = params[:id] || params["id"]
-        validate_uuid!(user_id)
-        validate_uuid!(factor_id)
+        _validate_uuid(user_id)
+        _validate_uuid(factor_id)
         delete("admin/users/#{user_id}/factors/#{factor_id}")
-      end
-
-      private
-
-      def validate_uuid!(id)
-        unless id.is_a?(String) && id.match?(UUID_REGEX)
-          raise ArgumentError, "Invalid id, '#{id}' is not a valid uuid"
-        end
       end
     end
   end
