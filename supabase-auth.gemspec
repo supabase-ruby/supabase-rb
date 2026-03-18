@@ -28,6 +28,6 @@ Gem::Specification.new do |spec|
 
   spec.add_development_dependency "rspec", "~> 3.12"
   spec.add_development_dependency "simplecov", "~> 0.22"
-  spec.add_development_dependency "vcr", "~> 6.2"
   spec.add_development_dependency "webmock", "~> 3.19"
+  spec.add_development_dependency "faker", "~> 3.2"
 end

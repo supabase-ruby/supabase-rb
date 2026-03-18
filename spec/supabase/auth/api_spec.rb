@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "webmock/rspec"
 
 RSpec.describe Supabase::Auth::Api do
   let(:base_url) { "https://example.supabase.co/auth/v1" }
