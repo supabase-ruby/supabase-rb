@@ -184,14 +184,9 @@ module Supabase
       end
 
       def parse_link_response(data)
-        link_keys = %w[action_link email_otp hashed_token redirect_to verification_type]
-        properties = Types::GenerateLinkProperties.new(
-          action_link: data["action_link"],
-          email_otp: data["email_otp"],
-          hashed_token: data["hashed_token"],
-          redirect_to: data["redirect_to"],
-          verification_type: data["verification_type"]
-        )
+        link_keys = Types::GenerateLinkProperties.members.map(&:to_s)
+        props_hash = link_keys.each_with_object({}) { |k, h| h[k.to_sym] = data[k] }
+        properties = Types::GenerateLinkProperties.new(**props_hash)
         user_data = data.reject { |k, _| link_keys.include?(k) }
         user = Types::User.from_hash(user_data)
         Types::GenerateLinkResponse.new(properties: properties, user: user)

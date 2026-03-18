@@ -363,6 +363,34 @@ RSpec.describe Supabase::Auth::Helpers do
       expect(result.properties.email_otp).to eq("123456")
       expect(result.user).not_to be_nil
     end
+
+    it "derives filter keys dynamically from GenerateLinkProperties members" do
+      # Verify the keys used for filtering match GenerateLinkProperties.members
+      expected_keys = Supabase::Auth::Types::GenerateLinkProperties.members.map(&:to_s)
+      expect(expected_keys).to contain_exactly("action_link", "email_otp", "hashed_token", "redirect_to", "verification_type")
+
+      # Verify that all GenerateLinkProperties members are extracted as properties, not left in user data
+      data = {
+        "action_link" => "https://example.com/verify",
+        "email_otp" => "654321",
+        "hashed_token" => "token_hash",
+        "redirect_to" => "https://example.com/redirect",
+        "verification_type" => "magiclink",
+        "id" => "user-456",
+        "email" => "dynamic@example.com",
+        "role" => "authenticated"
+      }
+      result = described_class.parse_link_response(data)
+
+      # All struct members become properties
+      expected_keys.each do |key|
+        expect(result.properties.send(key.to_sym)).to eq(data[key])
+      end
+
+      # User data should not contain any link property keys
+      expect(result.user.id).to eq("user-456")
+      expect(result.user.email).to eq("dynamic@example.com")
+    end
   end
 
   # auth-py: test_parse_user_response_with_user_object
