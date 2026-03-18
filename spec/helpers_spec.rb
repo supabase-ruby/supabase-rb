@@ -460,6 +460,113 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
+  # ── is_valid_uuid Tests ──────────────────────────────────────────────
+
+  describe ".is_valid_uuid" do
+    it "returns true for valid UUIDs" do
+      expect(described_class.is_valid_uuid("550e8400-e29b-41d4-a716-446655440000")).to be true
+      expect(described_class.is_valid_uuid("00000000-0000-0000-0000-000000000000")).to be true
+    end
+
+    it "returns false for invalid UUIDs" do
+      expect(described_class.is_valid_uuid("not-a-uuid")).to be false
+      expect(described_class.is_valid_uuid("")).to be false
+      expect(described_class.is_valid_uuid(nil)).to be false
+      expect(described_class.is_valid_uuid(123)).to be false
+    end
+  end
+
+  # ── get_error_message Tests (F-006 audit finding) ──────────────────
+
+  describe ".get_error_message" do
+    it "extracts msg from a Hash" do
+      expect(described_class.send(:get_error_message, { "msg" => "test msg" })).to eq("test msg")
+    end
+
+    it "extracts message from a Hash" do
+      expect(described_class.send(:get_error_message, { "message" => "test message" })).to eq("test message")
+    end
+
+    it "extracts error_description from a Hash" do
+      expect(described_class.send(:get_error_message, { "error_description" => "desc" })).to eq("desc")
+    end
+
+    it "extracts error from a Hash" do
+      expect(described_class.send(:get_error_message, { "error" => "err" })).to eq("err")
+    end
+
+    it "respects priority order: msg > message > error_description > error" do
+      error = { "error" => "err", "message" => "msg_val", "error_description" => "desc" }
+      expect(described_class.send(:get_error_message, error)).to eq("msg_val")
+    end
+
+    it "falls back to to_s for empty Hash" do
+      expect(described_class.send(:get_error_message, {})).to eq("{}")
+    end
+
+    it "extracts message from an object with attribute (Python parity)" do
+      obj = Struct.new(:message).new("object message")
+      expect(described_class.send(:get_error_message, obj)).to eq("object message")
+    end
+
+    it "falls back to to_s for non-Hash without matching attributes" do
+      expect(described_class.send(:get_error_message, 42)).to eq("42")
+    end
+  end
+
+  # ── parse_error_body Tests ─────────────────────────────────────────
+
+  describe ".parse_error_body" do
+    it "parses valid JSON" do
+      expect(described_class.send(:parse_error_body, '{"key":"value"}')).to eq({ "key" => "value" })
+    end
+
+    it "returns empty hash for nil" do
+      expect(described_class.send(:parse_error_body, nil)).to eq({})
+    end
+
+    it "returns empty hash for empty string" do
+      expect(described_class.send(:parse_error_body, "")).to eq({})
+    end
+
+    it "returns empty hash for invalid JSON" do
+      expect(described_class.send(:parse_error_body, "not json{{{")).to eq({})
+    end
+  end
+
+  # ── PKCE Deterministic Challenge Test ──────────────────────────────
+
+  describe "PKCE helpers" do
+    it "produces a deterministic challenge from a known verifier" do
+      verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+      challenge = described_class.generate_pkce_challenge(verifier)
+      # SHA256 of the verifier, base64url-encoded without padding
+      expected = Base64.urlsafe_encode64(Digest::SHA256.digest(verifier), padding: false)
+      expect(challenge).to eq(expected)
+    end
+
+    it "generates verifier using only valid PKCE characters" do
+      verifier = described_class.generate_pkce_verifier(128)
+      valid_chars = /\A[a-zA-Z0-9\-._~]+\z/
+      expect(verifier).to match(valid_chars)
+    end
+  end
+
+  # ── parse_jwks with valid keys Test ────────────────────────────────
+
+  describe ".parse_jwks" do
+    it "returns keys hash for valid JWKS response" do
+      jwks = { "keys" => [{ "kty" => "RSA", "kid" => "key1" }] }
+      result = described_class.parse_jwks(jwks)
+      expect(result).to eq(jwks)
+    end
+
+    it "raises AuthInvalidJwtError when keys key is missing" do
+      expect { described_class.parse_jwks({}) }
+        .to raise_error(Supabase::Auth::Errors::AuthInvalidJwtError, /JWKS is empty/)
+    end
+  end
+
   # ── 3 Pydantic-specific tests are skipped ─────────────────────────────
   # test_model_validate_pydantic_v1 — Pydantic-specific, not applicable to Ruby
   # test_model_dump_pydantic_v1 — Pydantic-specific, not applicable to Ruby

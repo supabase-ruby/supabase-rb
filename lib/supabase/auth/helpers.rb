@@ -156,9 +156,13 @@ module Supabase
       end
 
       def get_error_message(error)
-        return error.to_s unless error.is_a?(Hash)
-
-        error["msg"] || error["message"] || error["error_description"] || error["error"] || error.to_s
+        props = %w[msg message error_description error]
+        if error.is_a?(Hash)
+          props.each { |prop| return error[prop] if error.key?(prop) }
+        else
+          props.each { |prop| return error.send(prop) if error.respond_to?(prop) }
+        end
+        error.to_s
       end
 
       def parse_auth_response(data)
