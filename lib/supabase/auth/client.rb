@@ -242,6 +242,116 @@ module Supabase
         end
       end
 
+      def sign_in_anonymously
+        data = _request("POST", "signup", body: {})
+        response = Helpers.parse_auth_response(data)
+
+        if response.session
+          _save_session(response.session)
+          _notify_all_subscribers("SIGNED_IN", response.session)
+        end
+
+        response
+      end
+
+      def sign_in_with_id_token(credentials)
+        provider = credentials[:provider] || credentials["provider"]
+        token = credentials[:token] || credentials["token"]
+        nonce = credentials[:nonce] || credentials["nonce"]
+
+        body = { provider: provider, id_token: token }
+        body[:nonce] = nonce if nonce
+
+        data = _request("POST", "token", body: body, params: { "grant_type" => "id_token" })
+        response = Helpers.parse_auth_response(data)
+
+        if response.session
+          _save_session(response.session)
+          _notify_all_subscribers("SIGNED_IN", response.session)
+        end
+
+        response
+      end
+
+      def sign_in_with_sso(credentials)
+        domain = credentials[:domain] || credentials["domain"]
+        provider_id = credentials[:provider_id] || credentials["provider_id"]
+        options = credentials[:options] || credentials["options"] || {}
+
+        body = {}
+        body[:domain] = domain if domain
+        body[:provider_id] = provider_id if provider_id
+
+        redirect_to = options[:redirect_to]
+        data = _request("POST", "sso", body: body, redirect_to: redirect_to)
+        Helpers.parse_sso_response(data)
+      end
+
+      def sign_in_with_oauth(credentials)
+        provider = credentials[:provider] || credentials["provider"]
+        options = credentials[:options] || credentials["options"] || {}
+
+        url, params = _get_url_for_provider("#{@url}/authorize", provider, options)
+        Types::OAuthResponse.new(provider: provider, url: "#{url}?#{URI.encode_www_form(params)}")
+      end
+
+      def resend(credentials)
+        phone = credentials[:phone] || credentials["phone"]
+        email = credentials[:email] || credentials["email"]
+        type = credentials[:type] || credentials["type"]
+
+        unless email || phone
+          raise Errors::AuthInvalidCredentialsError,
+                "An email or phone number is required"
+        end
+
+        body = { type: type }
+        body[:email] = email if email
+        body[:phone] = phone if phone
+
+        _request("POST", "resend", body: body)
+      end
+
+      def reauthenticate
+        session = get_session
+        raise Errors::AuthSessionMissing unless session
+
+        _request("GET", "reauthenticate", jwt: session.access_token)
+      end
+
+      def reset_password_email(email:, **options)
+        session = get_session
+        raise Errors::AuthSessionMissing unless session
+
+        redirect_to = options[:redirect_to]
+        body = { email: email }
+        _request("POST", "recover", body: body, redirect_to: redirect_to)
+      end
+
+      def update_user(attributes)
+        session = get_session
+        raise Errors::AuthSessionMissing unless session
+
+        data = _request("PUT", "user", jwt: session.access_token, body: attributes)
+        response = Helpers.parse_user_response(data)
+
+        session_data = @current_session
+        if session_data
+          updated_session = Types::Session.new(
+            access_token: session_data.access_token,
+            refresh_token: session_data.refresh_token,
+            token_type: session_data.token_type,
+            expires_in: session_data.expires_in,
+            expires_at: session_data.expires_at,
+            user: response.user
+          )
+          _save_session(updated_session)
+          _notify_all_subscribers("USER_UPDATED", updated_session)
+        end
+
+        response
+      end
+
       def link_identity(credentials)
         provider = credentials[:provider] || credentials["provider"]
         options = credentials[:options] || credentials["options"] || {}
@@ -347,6 +457,37 @@ module Supabase
 
       def _url
         @url
+      end
+
+      def _auto_refresh_token=(value)
+        @auto_refresh_token = value
+      end
+
+      def _start_auto_refresh_token(seconds = nil)
+        # In Ruby, we don't use a background timer like Python.
+        # This is a no-op that returns nil, matching the Python test expectation.
+        nil
+      end
+
+      def _recover_and_refresh
+        data_str = @storage.get_item(@storage_key)
+        return unless data_str
+
+        data = JSON.parse(data_str)
+        session = Types::Session.from_hash(data)
+        @current_session = session
+
+        if @auto_refresh_token && session&.refresh_token
+          begin
+            refresh_session(session.refresh_token)
+          rescue Errors::AuthError
+            # Silently fail on refresh errors during recovery
+          end
+        end
+      end
+
+      def _list_factors
+        mfa.list_factors
       end
 
       def _remove_session

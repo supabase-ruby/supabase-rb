@@ -84,6 +84,8 @@ module Supabase
       end
       # Alias for AuthSessionMissing (matches Python's AuthSessionMissingError)
       AuthSessionMissingError = AuthSessionMissing
+      # Alias for AuthWeakPassword (matches Python's AuthWeakPasswordError)
+      AuthWeakPasswordError = AuthWeakPassword
     end
   end
 end

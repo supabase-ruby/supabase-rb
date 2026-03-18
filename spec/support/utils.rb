@@ -47,10 +47,11 @@ module TestUtils
   # @return [Supabase::Auth::Types::User]
   def create_new_user_with_email(email: nil, password: nil)
     credentials = mock_user_credentials(email: email, password: password)
-    service_role_api_client.create_user(
+    response = service_role_api_client.create_user(
       email: credentials[:email],
       password: credentials[:password]
     )
+    response.user
   end
 end
 

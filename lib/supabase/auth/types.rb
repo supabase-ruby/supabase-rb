@@ -79,6 +79,8 @@ module Supabase
         :factors,
         :created_at,
         :updated_at,
+        :new_email,
+        :invited_at,
         keyword_init: true
       ) do
         def self.from_hash(hash)
@@ -102,7 +104,9 @@ module Supabase
             identities: identities,
             factors: factors,
             created_at: Types.parse_timestamp(hash["created_at"] || hash[:created_at]),
-            updated_at: Types.parse_timestamp(hash["updated_at"] || hash[:updated_at])
+            updated_at: Types.parse_timestamp(hash["updated_at"] || hash[:updated_at]),
+            new_email: hash["new_email"] || hash[:new_email],
+            invited_at: Types.parse_timestamp(hash["invited_at"] || hash[:invited_at])
           )
         end
       end
