@@ -2,21 +2,23 @@
 
 module Supabase
   module Auth
-    class MemoryStorage
+    class MemoryStorage < SupportedStorage
+      attr_reader :storage
+
       def initialize
-        @store = {}
+        @storage = {}
       end
 
       def get_item(key)
-        @store[key]
+        @storage[key]
       end
 
       def set_item(key, value)
-        @store[key] = value
+        @storage[key] = value
       end
 
       def remove_item(key)
-        @store.delete(key)
+        @storage.delete(key)
       end
     end
   end
