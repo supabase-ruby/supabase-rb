@@ -45,18 +45,38 @@ module Supabase
       # --- Public API ---
 
       def sign_up(credentials)
+        _remove_session
+
         email = credentials[:email] || credentials["email"]
         phone = credentials[:phone] || credentials["phone"]
         password = credentials[:password] || credentials["password"]
+        options = credentials[:options] || credentials["options"] || {}
+        redirect_to = options[:redirect_to] || options[:email_redirect_to]
+        user_data = options[:data] || {}
+        channel = options[:channel] || "sms"
+        captcha_token = options[:captcha_token]
 
-        body = { password: password }
         if email
-          body[:email] = email
+          body = {
+            email: email,
+            password: password,
+            data: user_data,
+            gotrue_meta_security: { captcha_token: captcha_token }
+          }
         elsif phone
-          body[:phone] = phone
+          body = {
+            phone: phone,
+            password: password,
+            data: user_data,
+            channel: channel,
+            gotrue_meta_security: { captcha_token: captcha_token }
+          }
+        else
+          raise Errors::AuthInvalidCredentialsError,
+                "You must provide either an email or phone number and a password"
         end
 
-        data = _request("POST", "signup", body: body)
+        data = _request("POST", "signup", body: body, redirect_to: redirect_to)
         response = Helpers.parse_auth_response(data)
 
         if response.session
