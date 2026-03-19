@@ -14,7 +14,7 @@ module TestUtils
   end
 
   # Generates unique credentials each call using Faker.
-  # Phone numbers use "1#{rand_numbers[-11:]}" matching auth-py logic.
+  # Phone numbers use "1#{rand_numbers[-11:]}" matching the Python SDK logic.
   # @param options [Hash] Optional overrides for :email, :phone, :password
   # @return [Hash] with :email, :phone, :password keys
   def mock_user_credentials(options = {})

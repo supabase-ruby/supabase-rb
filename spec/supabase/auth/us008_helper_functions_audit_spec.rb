@@ -4,7 +4,7 @@ require "spec_helper"
 require "webmock/rspec"
 
 # US-008: Audit Helper Functions
-# Verifies utility/helper functions match Python auth-py behavior.
+# Verifies utility/helper functions match the Python SDK behavior.
 RSpec.describe "US-008: Helper Functions Audit" do
   let(:helpers) { Supabase::Auth::Helpers }
 

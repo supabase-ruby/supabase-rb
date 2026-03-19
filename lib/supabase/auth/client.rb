@@ -792,7 +792,7 @@ module Supabase
             end
           rescue Errors::AuthRetryableError
             if @network_retries < Constants::MAX_RETRIES
-              _start_auto_refresh_token(Constants::RETRY_INTERVAL ** (@network_retries * 100))
+              _start_auto_refresh_token(200 * (Constants::RETRY_INTERVAL ** (@network_retries - 1)))
             end
           rescue StandardError
             # Swallow other errors
@@ -828,7 +828,7 @@ module Supabase
                   @refresh_token_timer.cancel
                 end
                 @refresh_token_timer = Timer.new(
-                  (Constants::RETRY_INTERVAL ** (@network_retries * 100)) / 1000.0
+                  (200 * (Constants::RETRY_INTERVAL ** (@network_retries - 1))) / 1000.0
                 ) { _recover_and_refresh }
                 @refresh_token_timer.start
                 return

@@ -5,7 +5,7 @@ require "jwt"
 require "securerandom"
 
 # These tests verify that the Ruby client sends the correct request bodies,
-# matching the Python auth-py reference implementation.
+# matching the Python reference implementation.
 # Each test mocks _request to capture and assert on the exact arguments.
 RSpec.describe "Request body assertions" do
   let(:mock_user) do
@@ -1856,7 +1856,7 @@ RSpec.describe "Request body assertions" do
   end
 
   # ===== US-004: Admin API Method Audit =====
-  # Verifies all AdminApi methods match Python auth-py's SyncGoTrueAdminAPI
+  # Verifies all AdminApi methods match Python's SyncGoTrueAdminAPI
 
   describe "AdminApi#create_user" do
     let(:admin) do

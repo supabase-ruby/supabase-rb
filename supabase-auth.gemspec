@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
 
   spec.summary = "Ruby client for Supabase Auth (GoTrue API)"
   spec.description = "A Ruby gem implementing a client for Supabase Auth (GoTrue API), " \
-                     "ported from supabase/auth-py with adaptations for Ruby idioms."
+                     "with adaptations for Ruby idioms."
   spec.homepage = "https://github.com/supabase/supabase-rb"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0.0"

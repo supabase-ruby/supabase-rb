@@ -211,14 +211,14 @@ RSpec.describe "HTTP Client / Base API audit (US-009)" do
       expect(client.instance_variable_get(:@network_retries)).to eq(0)
     end
 
-    it "uses RETRY_INTERVAL ** (retries * 100) formula matching Python" do
-      # Python: RETRY_INTERVAL ** (self._network_retries * 100)
-      # Ruby:   Constants::RETRY_INTERVAL ** (@network_retries * 100)
-      # With RETRY_INTERVAL=2, retries=1: 2 ** 100 ms
+    it "uses 200 * RETRY_INTERVAL ** (retries - 1) formula matching auth-js" do
+      # auth-js: 200 * Math.pow(2, attempt - 1) → 200ms, 400ms, 800ms, ...
+      # Ruby:    200 * (Constants::RETRY_INTERVAL ** (@network_retries - 1))
       interval = Supabase::Auth::Constants::RETRY_INTERVAL
-      retries = 1
-      expected = interval ** (retries * 100)
-      expect(expected).to eq(2**100)
+      expect(200 * (interval ** (1 - 1))).to eq(200)   # retry 1 → 200ms
+      expect(200 * (interval ** (2 - 1))).to eq(400)   # retry 2 → 400ms
+      expect(200 * (interval ** (3 - 1))).to eq(800)   # retry 3 → 800ms
+      expect(200 * (interval ** (4 - 1))).to eq(1600)  # retry 4 → 1600ms
     end
   end
 

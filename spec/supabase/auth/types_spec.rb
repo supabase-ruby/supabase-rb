@@ -281,7 +281,7 @@ RSpec.describe Supabase::Auth::Types do
   end
 
   # ===== US-006 Type Audit Tests =====
-  # Verify all type definitions match Python auth-py Pydantic models
+  # Verify all type definitions match Python Pydantic models
 
   describe "User struct field parity with Python" do
     it "has all fields from Python User model" do

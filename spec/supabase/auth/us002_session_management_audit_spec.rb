@@ -6,7 +6,7 @@ require "jwt"
 require "json"
 
 # US-002: Audit Session Management Methods
-# Verifies that Ruby session management matches Python (auth-py) behavior:
+# Verifies that Ruby session management matches Python behavior:
 #   - get_session auto-refreshes when within EXPIRY_MARGIN (10 seconds)
 #   - set_session validates and stores session correctly
 #   - refresh_session sends correct grant_type=refresh_token request
@@ -561,8 +561,8 @@ RSpec.describe "US-002: Session Management Audit" do
   end
 
   # ----------------------------------------------------------------
-  # AC-6: Auto-refresh timer uses exponential backoff matching Python
-  # Python: RETRY_INTERVAL ** (network_retries * 100), MAX_RETRIES=10
+  # AC-6: Auto-refresh timer uses exponential backoff matching auth-js
+  # auth-js: 200 * Math.pow(2, attempt - 1), MAX_RETRIES=10
   # ----------------------------------------------------------------
   describe "auto-refresh exponential backoff" do
     it "MAX_RETRIES is 10 (matches Python)" do
@@ -573,7 +573,7 @@ RSpec.describe "US-002: Session Management Audit" do
       expect(Supabase::Auth::Constants::RETRY_INTERVAL).to eq(2)
     end
 
-    it "schedules retry with RETRY_INTERVAL ** (network_retries * 100) on AuthRetryableError" do
+    it "schedules retry with 200 * RETRY_INTERVAL ** (retries - 1) on AuthRetryableError" do
       client = build_client(auto_refresh: true)
       setup_session(client, mock_session)
 
@@ -598,9 +598,9 @@ RSpec.describe "US-002: Session Management Audit" do
       client._start_auto_refresh_token(1) # 1ms delay
       sleep 0.2
 
-      # After first failure, network_retries=1, so value = 2 ** (1 * 100)
+      # After first failure, network_retries=1, so value = 200 * 2^0 = 200ms
       if retry_values.any?
-        expect(retry_values.first).to eq(Supabase::Auth::Constants::RETRY_INTERVAL ** (1 * 100))
+        expect(retry_values.first).to eq(200 * (Supabase::Auth::Constants::RETRY_INTERVAL ** (1 - 1)))
       end
     end
 

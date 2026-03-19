@@ -3,7 +3,7 @@
 require "spec_helper"
 
 # US-010: Audit PKCE Flow
-# Verifies that the Ruby PKCE implementation matches Python's auth-py behavior.
+# Verifies that the Ruby PKCE implementation matches the Python SDK behavior.
 RSpec.describe "PKCE Flow (US-010)" do
   let(:mock_user) do
     Supabase::Auth::Types::User.new(
@@ -52,7 +52,7 @@ RSpec.describe "PKCE Flow (US-010)" do
     )
   end
 
-  # auth-py: helpers.py generate_pkce_verifier — uses secrets.choice over
+  # Ported from: helpers.py generate_pkce_verifier — uses secrets.choice over
   # string.ascii_letters + string.digits + "-._~" with default length=64
   describe "Code verifier generation" do
     it "produces cryptographically random values of default length 64" do
@@ -89,7 +89,7 @@ RSpec.describe "PKCE Flow (US-010)" do
     end
   end
 
-  # auth-py: helpers.py generate_pkce_challenge — SHA-256 + base64url (no padding)
+  # Ported from: helpers.py generate_pkce_challenge — SHA-256 + base64url (no padding)
   describe "Code challenge computation (S256)" do
     it "produces known SHA-256 base64url output for a known verifier" do
       # Deterministic test: known input → known output
@@ -120,7 +120,7 @@ RSpec.describe "PKCE Flow (US-010)" do
     end
   end
 
-  # auth-py: _get_url_for_provider stores verifier with key "{storage_key}-code-verifier"
+  # Ported from: _get_url_for_provider stores verifier with key "{storage_key}-code-verifier"
   describe "Code verifier storage" do
     it "stores verifier with key '{storage_key}-code-verifier' during PKCE flow" do
       client._flow_type = "pkce"
@@ -146,7 +146,7 @@ RSpec.describe "PKCE Flow (US-010)" do
     end
   end
 
-  # auth-py: exchange_code_for_session sends POST /token?grant_type=pkce
+  # Ported from: exchange_code_for_session sends POST /token?grant_type=pkce
   # with body {auth_code, code_verifier}
   describe "exchange_code_for_session" do
     it "sends POST to 'token' with grant_type=pkce query param" do
@@ -212,7 +212,7 @@ RSpec.describe "PKCE Flow (US-010)" do
     end
   end
 
-  # auth-py: code_verifier removed from storage after exchange
+  # Ported from: code_verifier removed from storage after exchange
   describe "Code verifier cleanup" do
     it "removes code_verifier from storage after successful exchange" do
       storage_key = "#{client._storage_key}-code-verifier"
@@ -236,7 +236,7 @@ RSpec.describe "PKCE Flow (US-010)" do
     end
   end
 
-  # auth-py: flow_type defaults to "implicit", can be set to "pkce"
+  # Ported from: flow_type defaults to "implicit", can be set to "pkce"
   describe "Flow type switching" do
     it "defaults to 'implicit'" do
       default_client = Supabase::Auth::Client.new(

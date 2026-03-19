@@ -105,7 +105,6 @@ module Supabase
         end
       end
 
-      # Ruby-only enhancement: not present in Python auth-py (F-004).
       # Raised for PKCE flow errors.
       class AuthPKCEError < AuthError
         def initialize(message)

@@ -5,7 +5,7 @@ require "webmock/rspec"
 require "json"
 
 # US-003: Audit User Management Methods
-# Verifies that Ruby user management methods match Python (auth-py) behavior:
+# Verifies that Ruby user management methods match Python behavior:
 #   - get_user accepts optional JWT parameter
 #   - update_user sends PUT to /user with correct body and email_redirect_to header
 #   - link_identity returns correct type (FINDING: Python returns OAuthResponse, Ruby returns LinkIdentityResponse)

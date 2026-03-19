@@ -6,7 +6,7 @@ require "json"
 require "jwt"
 
 # US-005: Audit MFA API Methods
-# Verifies that Ruby MFA API methods match Python (auth-py) behavior:
+# Verifies that Ruby MFA API methods match Python behavior:
 #   - enroll supports both totp and phone factor types
 #   - challenge sends correct body with optional channel param
 #   - verify sends factor_id, challenge_id, code

@@ -4,7 +4,7 @@ require "spec_helper"
 require "webmock/rspec"
 
 # US-007: Audit Error Handling
-# Verifies error classes, error codes, and error handling logic match Python auth-py.
+# Verifies error classes, error codes, and error handling logic match the Python SDK.
 RSpec.describe "US-007: Error Handling Audit" do
   describe "AC-1: Error hierarchy matches Python" do
     # Python hierarchy:

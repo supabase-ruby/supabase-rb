@@ -6,7 +6,7 @@ require "webmock/rspec"
 RSpec.describe Supabase::Auth::Helpers do
   # ── Error Handling Tests (10) ──────────────────────────────────────────
 
-  # auth-py: test_handle_exception_with_api_version_and_error_code
+  # Ported from: test_handle_exception_with_api_version_and_error_code
   describe ".handle_exception" do
     it "returns AuthApiError with error code from AuthApiError exception" do
       error = Supabase::Auth::Errors::AuthApiError.new("Error code message", status: 400, code: "error_code")
@@ -26,7 +26,7 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
-    # auth-py: test_handle_exception_without_api_version_and_weak_password_error_code
+    # Ported from: test_handle_exception_without_api_version_and_weak_password_error_code
     it "returns AuthWeakPassword with weak_password error code" do
       stub_request(:get, "http://localhost/hello-world")
         .to_return(status: 400,
@@ -44,7 +44,7 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
-    # auth-py: test_handle_exception_with_api_version_2024_01_01_and_error_code
+    # Ported from: test_handle_exception_with_api_version_2024_01_01_and_error_code
     it "returns AuthApiError with error code from API version 2024-01-01 response" do
       stub_request(:get, "http://localhost/hello-world")
         .to_return(status: 400,
@@ -63,7 +63,7 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
-    # auth-py: test_handle_exception_non_http_error
+    # Ported from: test_handle_exception_non_http_error
     it "returns AuthRetryableError for non-HTTP errors" do
       exception = ValueError.new("Test error") rescue StandardError.new("Test error")
       result = described_class.handle_exception(exception)
@@ -73,7 +73,7 @@ RSpec.describe Supabase::Auth::Helpers do
       expect(result.status).to eq(0)
     end
 
-    # auth-py: test_handle_exception_network_error
+    # Ported from: test_handle_exception_network_error
     it "returns AuthRetryableError for 503 network errors" do
       stub_request(:get, "http://localhost/hello-world")
         .to_return(status: 503, body: "Service Unavailable")
@@ -88,7 +88,7 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
-    # auth-py: test_handle_exception_network_error (502)
+    # Ported from: test_handle_exception_network_error (502)
     it "returns AuthRetryableError for 502 network errors" do
       stub_request(:get, "http://localhost/hello-world")
         .to_return(status: 502, body: "Bad Gateway")
@@ -103,7 +103,7 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
-    # auth-py: test_handle_exception_network_error (504)
+    # Ported from: test_handle_exception_network_error (504)
     it "returns AuthRetryableError for 504 network errors" do
       stub_request(:get, "http://localhost/hello-world")
         .to_return(status: 504, body: "Gateway Timeout")
@@ -118,7 +118,7 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
-    # auth-py: test_handle_exception_with_weak_password_attribute
+    # Ported from: test_handle_exception_with_weak_password_attribute
     it "returns AuthApiError when error_code is nil and no weak_password dict" do
       stub_request(:get, "http://localhost/hello-world")
         .to_return(status: 400,
@@ -137,7 +137,7 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
-    # auth-py: test_handle_exception_weak_password_with_error_code
+    # Ported from: test_handle_exception_weak_password_with_error_code
     it "returns AuthWeakPassword when error_code is weak_password with reasons" do
       stub_request(:get, "http://localhost/hello-world")
         .to_return(status: 400,
@@ -156,7 +156,7 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
-    # auth-py: test_handle_exception_with_new_api_version
+    # Ported from: test_handle_exception_with_new_api_version
     it "returns AuthWeakPassword for new API version with code field" do
       stub_request(:get, "http://localhost/hello-world")
         .to_return(status: 400,
@@ -175,7 +175,7 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
-    # auth-py: test_handle_exception_unknown_error
+    # Ported from: test_handle_exception_unknown_error
     it "returns AuthUnknownError when response JSON is unparseable" do
       stub_request(:get, "http://localhost/hello-world")
         .to_return(status: 500, body: "not json at all{{{",
@@ -191,7 +191,7 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
-    # auth-py: test_handle_exception_weak_password_branch
+    # Ported from: test_handle_exception_weak_password_branch
     # Python test monkey-patches isinstance to make weak_password appear as both dict and list,
     # testing an otherwise unreachable branch. In Ruby, we test the same code path by providing
     # a weak_password dict with reasons — the implementation should detect "weak_password" in
@@ -217,7 +217,7 @@ RSpec.describe Supabase::Auth::Helpers do
 
   # ── JWT and PKCE Tests (6) ─────────────────────────────────────────────
 
-  # auth-py: test_decode_jwt
+  # Ported from: test_decode_jwt
   describe ".decode_jwt" do
     it "decodes a valid JWT" do
       token = mock_access_token
@@ -234,7 +234,7 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
-  # auth-py: test_generate_pkce_verifier
+  # Ported from: test_generate_pkce_verifier
   describe ".generate_pkce_verifier" do
     it "generates a string verifier of specified length" do
       result = described_class.generate_pkce_verifier(45)
@@ -248,7 +248,7 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
-  # auth-py: test_generate_pkce_challenge
+  # Ported from: test_generate_pkce_challenge
   describe ".generate_pkce_challenge" do
     it "generates a challenge string from a verifier" do
       verifier = described_class.generate_pkce_verifier(45)
@@ -258,21 +258,21 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
-  # auth-py: test_validate_exp_with_no_exp
+  # Ported from: test_validate_exp_with_no_exp
   describe ".validate_exp" do
     it "raises AuthInvalidJwtError when exp is nil" do
       expect { described_class.validate_exp(nil) }
         .to raise_error(Supabase::Auth::Errors::AuthInvalidJwtError, /JWT has no expiration time/)
     end
 
-    # auth-py: test_validate_exp_with_expired_exp
+    # Ported from: test_validate_exp_with_expired_exp
     it "raises AuthInvalidJwtError when exp is in the past" do
       exp = Time.now.to_i - 3600
       expect { described_class.validate_exp(exp) }
         .to raise_error(Supabase::Auth::Errors::AuthInvalidJwtError, /JWT has expired/)
     end
 
-    # auth-py: test_validate_exp_with_valid_exp
+    # Ported from: test_validate_exp_with_valid_exp
     it "does not raise when exp is in the future" do
       exp = Time.now.to_i + 3600
       expect { described_class.validate_exp(exp) }.not_to raise_error
@@ -281,7 +281,7 @@ RSpec.describe Supabase::Auth::Helpers do
 
   # ── Response Parsing Tests (12) ────────────────────────────────────────
 
-  # auth-py: test_parse_response_api_version_with_valid_date
+  # Ported from: test_parse_response_api_version_with_valid_date
   describe ".parse_response_api_version" do
     it "parses valid date from response header" do
       response = instance_double(Faraday::Response, headers: { "X-Supabase-Api-Version" => "2024-01-01" })
@@ -292,7 +292,7 @@ RSpec.describe Supabase::Auth::Helpers do
       expect(result.day).to eq(1)
     end
 
-    # auth-py: test_parse_response_api_version_with_invalid_dates
+    # Ported from: test_parse_response_api_version_with_invalid_dates
     it "returns nil for invalid dates" do
       dates = ["2024-01-32", "", "notadate", "Sat Feb 24 2024 17:59:17 GMT+0100"]
       dates.each do |date|
@@ -302,7 +302,7 @@ RSpec.describe Supabase::Auth::Helpers do
       end
     end
 
-    # auth-py: test_parse_response_api_version_invalid_date (mock-based)
+    # Ported from: test_parse_response_api_version_invalid_date (mock-based)
     it "returns nil for invalid date 2023-02-30" do
       response = instance_double(Faraday::Response, headers: { "X-Supabase-Api-Version" => "2023-02-30" })
       result = described_class.parse_response_api_version(response)
@@ -310,7 +310,7 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
-  # auth-py: test_parse_auth_response_with_session
+  # Ported from: test_parse_auth_response_with_session
   describe ".parse_auth_response" do
     it "parses response with session data" do
       data = {
@@ -329,7 +329,7 @@ RSpec.describe Supabase::Auth::Helpers do
       expect(result.user).not_to be_nil
     end
 
-    # auth-py: test_parse_auth_response_without_session
+    # Ported from: test_parse_auth_response_without_session
     it "parses response without session data" do
       data = {
         "user" => {
@@ -345,7 +345,7 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
-  # auth-py: test_parse_link_response
+  # Ported from: test_parse_link_response
   describe ".parse_link_response" do
     it "parses link response with properties and user" do
       data = {
@@ -393,7 +393,7 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
-  # auth-py: test_parse_user_response_with_user_object
+  # Ported from: test_parse_user_response_with_user_object
   describe ".parse_user_response" do
     it "parses data with user key" do
       data = { "user" => { "id" => "user-123", "email" => "test@example.com" } }
@@ -403,7 +403,7 @@ RSpec.describe Supabase::Auth::Helpers do
       expect(result.user.id).to eq("user-123")
     end
 
-    # auth-py: test_parse_user_response_without_user_object
+    # Ported from: test_parse_user_response_without_user_object
     it "wraps data without user key" do
       data = { "id" => "user-123", "email" => "test@example.com" }
       result = described_class.parse_user_response(data)
@@ -413,7 +413,7 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
-  # auth-py: test_parse_sso_response
+  # Ported from: test_parse_sso_response
   describe ".parse_sso_response" do
     it "parses SSO response data" do
       result = described_class.parse_sso_response({ "url" => "https://provider.com/auth" })
@@ -422,7 +422,7 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
-  # auth-py: test_parse_link_identity_response
+  # Ported from: test_parse_link_identity_response
   describe ".parse_link_identity_response" do
     it "parses link identity response" do
       result = described_class.parse_link_identity_response({ "url" => "http://localhost/hello-world" })
@@ -431,7 +431,7 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
-  # auth-py: test_parse_jwks_empty_keys
+  # Ported from: test_parse_jwks_empty_keys
   describe ".parse_jwks" do
     it "raises AuthInvalidJwtError for empty keys" do
       expect { described_class.parse_jwks({ "keys" => [] }) }
@@ -439,7 +439,7 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
-  # auth-py: test_parse_auth_otp_response
+  # Ported from: test_parse_auth_otp_response
   describe ".parse_auth_otp_response" do
     it "parses response with message_id" do
       result = described_class.parse_auth_otp_response({ "message_id" => "12345" })
@@ -460,7 +460,7 @@ RSpec.describe Supabase::Auth::Helpers do
 
   # ── Misc Tests (2) ────────────────────────────────────────────────────
 
-  # auth-py: test_get_error_code
+  # Ported from: test_get_error_code
   describe ".get_error_code" do
     it "returns nil for empty hash" do
       expect(described_class.get_error_code({})).to be_nil
@@ -471,7 +471,7 @@ RSpec.describe Supabase::Auth::Helpers do
     end
   end
 
-  # auth-py: test_is_http_url
+  # Ported from: test_is_http_url
   describe ".is_http_url" do
     it "returns true for valid HTTP/HTTPS URLs" do
       expect(described_class.is_http_url("http://example.com")).to be true

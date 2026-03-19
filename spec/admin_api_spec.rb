@@ -8,14 +8,14 @@ RSpec.describe "Admin API Spec" do
     WebMock.allow_net_connect! if defined?(WebMock)
   end
 
-  # auth-py: test_create_user_should_create_a_new_user (test_gotrue_admin_api.py:29)
+  # Ported from: test_create_user_should_create_a_new_user
   it "creates a new user" do
     credentials = mock_user_credentials
     response = create_new_user_with_email(email: credentials[:email])
     expect(response.email).to eq(credentials[:email])
   end
 
-  # auth-py: test_create_user_with_user_metadata (test_gotrue_admin_api.py:35)
+  # Ported from: test_create_user_with_user_metadata
   it "creates user with user_metadata" do
     user_metadata = mock_user_metadata
     credentials = mock_user_credentials
@@ -29,7 +29,7 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.user_metadata).to have_key("profile_image")
   end
 
-  # auth-py: test_create_user_with_user_and_app_metadata (test_gotrue_admin_api.py:50)
+  # Ported from: test_create_user_with_user_and_app_metadata
   it "creates user with user_metadata and app_metadata" do
     user_metadata = mock_user_metadata
     app_metadata = mock_app_metadata
@@ -46,7 +46,7 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.app_metadata).to have_key("providers")
   end
 
-  # auth-py: test_create_user_with_app_metadata (test_gotrue_admin_api.py:555)
+  # Ported from: test_create_user_with_app_metadata
   it "creates user with app_metadata" do
     app_metadata = mock_app_metadata
     credentials = mock_user_credentials
@@ -60,7 +60,7 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.app_metadata).to have_key("providers")
   end
 
-  # auth-py: test_list_users_should_return_registered_users (test_gotrue_admin_api.py:68)
+  # Ported from: test_list_users_should_return_registered_users
   it "lists users including newly created user" do
     credentials = mock_user_credentials
     create_new_user_with_email(email: credentials[:email])
@@ -70,7 +70,7 @@ RSpec.describe "Admin API Spec" do
     expect(emails).to include(credentials[:email])
   end
 
-  # auth-py: test_get_user_fetches_a_user_by_their_access_token (test_gotrue_admin_api.py:78)
+  # Ported from: test_get_user_fetches_a_user_by_their_access_token
   it "gets user by access token" do
     credentials = mock_user_credentials
     client = auth_client_with_session
@@ -80,7 +80,7 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.email).to eq(credentials[:email])
   end
 
-  # auth-py: test_get_user_by_id_should_a_registered_user_given_its_user_identifier (test_gotrue_admin_api.py:92)
+  # Ported from: test_get_user_by_id_should_a_registered_user_given_its_user_identifier
   it "gets user by ID" do
     credentials = mock_user_credentials
     user = create_new_user_with_email(email: credentials[:email])
@@ -89,14 +89,14 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.email).to eq(credentials[:email])
   end
 
-  # auth-py: test_get_user_by_id_invalid_id_raises_error (test_gotrue_admin_api.py:596)
+  # Ported from: test_get_user_by_id_invalid_id_raises_error
   it "raises ArgumentError for invalid UUID in get_user_by_id" do
     expect {
       service_role_api_client.get_user_by_id("invalid_id")
     }.to raise_error(ArgumentError, /Invalid id, 'invalid_id' is not a valid uuid/)
   end
 
-  # auth-py: test_modify_email_using_update_user_by_id (test_gotrue_admin_api.py:100)
+  # Ported from: test_modify_email_using_update_user_by_id
   it "updates email via update_user_by_id" do
     credentials = mock_user_credentials
     user = create_new_user_with_email(email: credentials[:email])
@@ -107,7 +107,7 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.email).to eq("new_#{user.email}")
   end
 
-  # auth-py: test_modify_user_metadata_using_update_user_by_id (test_gotrue_admin_api.py:112)
+  # Ported from: test_modify_user_metadata_using_update_user_by_id
   it "updates user_metadata via update_user_by_id" do
     credentials = mock_user_credentials
     user = create_new_user_with_email(email: credentials[:email])
@@ -120,7 +120,7 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.user_metadata).to eq(user_metadata)
   end
 
-  # auth-py: test_modify_app_metadata_using_update_user_by_id (test_gotrue_admin_api.py:126)
+  # Ported from: test_modify_app_metadata_using_update_user_by_id
   it "updates app_metadata via update_user_by_id" do
     credentials = mock_user_credentials
     user = create_new_user_with_email(email: credentials[:email])
@@ -133,7 +133,7 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.app_metadata).to have_key("roles")
   end
 
-  # auth-py: test_modify_confirm_email_using_update_user_by_id (test_gotrue_admin_api.py:140)
+  # Ported from: test_modify_confirm_email_using_update_user_by_id
   it "confirms email via update_user_by_id" do
     credentials = mock_user_credentials
     response = client_api_auto_confirm_off_signups_enabled_client.sign_up(
@@ -149,14 +149,14 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.email_confirmed_at).to be_truthy
   end
 
-  # auth-py: test_update_user_by_id_invalid_id_raises_error (test_gotrue_admin_api.py:603)
+  # Ported from: test_update_user_by_id_invalid_id_raises_error
   it "raises ArgumentError for invalid UUID in update_user_by_id" do
     expect {
       service_role_api_client.update_user_by_id("invalid_id", email: "test@test.com")
     }.to raise_error(ArgumentError, /Invalid id, 'invalid_id' is not a valid uuid/)
   end
 
-  # auth-py: test_invalid_credential_sign_in_with_phone (test_gotrue_admin_api.py:159)
+  # Ported from: test_invalid_credential_sign_in_with_phone
   it "raises AuthApiError for invalid phone sign-in" do
     expect {
       client_api_auto_confirm_off_signups_enabled_client.sign_in_with_password(
@@ -166,7 +166,7 @@ RSpec.describe "Admin API Spec" do
     }.to raise_error(Supabase::Auth::Errors::AuthApiError)
   end
 
-  # auth-py: test_invalid_credential_sign_in_with_email (test_gotrue_admin_api.py:173)
+  # Ported from: test_invalid_credential_sign_in_with_email
   it "raises AuthApiError for invalid email sign-in" do
     expect {
       client_api_auto_confirm_off_signups_enabled_client.sign_in_with_password(
@@ -176,7 +176,7 @@ RSpec.describe "Admin API Spec" do
     }.to raise_error(Supabase::Auth::Errors::AuthApiError)
   end
 
-  # auth-py: test_sign_in_with_otp_email (test_gotrue_admin_api.py:187)
+  # Ported from: test_sign_in_with_otp_email
   it "raises AuthApiError for email OTP" do
     begin
       client_api_auto_confirm_off_signups_enabled_client.sign_in_with_otp(
@@ -187,7 +187,7 @@ RSpec.describe "Admin API Spec" do
     end
   end
 
-  # auth-py: test_sign_in_with_otp_phone (test_gotrue_admin_api.py:198)
+  # Ported from: test_sign_in_with_otp_phone
   it "raises AuthApiError for phone OTP" do
     expect {
       client_api_auto_confirm_off_signups_enabled_client.sign_in_with_otp(
@@ -196,7 +196,7 @@ RSpec.describe "Admin API Spec" do
     }.to raise_error(Supabase::Auth::Errors::AuthApiError)
   end
 
-  # auth-py: test_verify_otp_with_non_existent_phone_number (test_gotrue_admin_api.py:340)
+  # Ported from: test_verify_otp_with_non_existent_phone_number
   it "raises AuthError for non-existent phone in verify_otp" do
     otp = mock_verification_otp
     expect {
@@ -208,7 +208,7 @@ RSpec.describe "Admin API Spec" do
     }.to raise_error(Supabase::Auth::Errors::AuthError, /Token has expired or is invalid/)
   end
 
-  # auth-py: test_verify_otp_with_invalid_phone_number (test_gotrue_admin_api.py:356)
+  # Ported from: test_verify_otp_with_invalid_phone_number
   it "raises AuthError for invalid phone format in verify_otp" do
     credentials = mock_user_credentials
     otp = mock_verification_otp
@@ -221,7 +221,7 @@ RSpec.describe "Admin API Spec" do
     }.to raise_error(Supabase::Auth::Errors::AuthError, /Invalid phone number format/)
   end
 
-  # auth-py: test_resend (test_gotrue_admin_api.py:209)
+  # Ported from: test_resend
   it "tolerates resend for unregistered phone" do
     begin
       client_api_auto_confirm_off_signups_enabled_client.resend(
@@ -233,7 +233,7 @@ RSpec.describe "Admin API Spec" do
     end
   end
 
-  # auth-py: test_resend_missing_credentials (test_gotrue_admin_api.py:242)
+  # Ported from: test_resend_missing_credentials
   it "raises AuthInvalidCredentialsError for missing resend credentials" do
     expect {
       client_api_auto_confirm_off_signups_enabled_client.resend(
@@ -242,21 +242,21 @@ RSpec.describe "Admin API Spec" do
     }.to raise_error(Supabase::Auth::Errors::AuthInvalidCredentialsError)
   end
 
-  # auth-py: test_reauthenticate (test_gotrue_admin_api.py:218)
+  # Ported from: test_reauthenticate
   it "raises AuthSessionMissingError for reauthenticate without session" do
     expect {
       auth_client_with_session.reauthenticate
     }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
   end
 
-  # auth-py: test_refresh_session (test_gotrue_admin_api.py:225)
+  # Ported from: test_refresh_session
   it "raises AuthSessionMissingError for refresh_session without session" do
     expect {
       auth_client_with_session.refresh_session
     }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
   end
 
-  # auth-py: test_reset_password_for_email (test_gotrue_admin_api.py:232)
+  # Ported from: test_reset_password_for_email
   # reset_password_email does not require an active session — it's a public endpoint
   it "sends password reset email without requiring a session" do
     credentials = mock_user_credentials
@@ -266,7 +266,7 @@ RSpec.describe "Admin API Spec" do
     }.not_to raise_error
   end
 
-  # auth-py: test_sign_in_anonymously (test_gotrue_admin_api.py:251)
+  # Ported from: test_sign_in_anonymously
   it "attempts anonymous sign-in tolerating AuthApiError" do
     begin
       response = auth_client_with_session.sign_in_anonymously
@@ -276,7 +276,7 @@ RSpec.describe "Admin API Spec" do
     end
   end
 
-  # auth-py: test_delete_user_should_be_able_delete_an_existing_user (test_gotrue_admin_api.py:259)
+  # Ported from: test_delete_user_should_be_able_delete_an_existing_user
   it "deletes user and confirms removal" do
     credentials = mock_user_credentials
     user = create_new_user_with_email(email: credentials[:email])
@@ -286,14 +286,14 @@ RSpec.describe "Admin API Spec" do
     expect(emails).not_to include(credentials[:email])
   end
 
-  # auth-py: test_delete_user_invalid_id_raises_error (test_gotrue_admin_api.py:612)
+  # Ported from: test_delete_user_invalid_id_raises_error
   it "raises ArgumentError for invalid UUID in delete_user" do
     expect {
       service_role_api_client.delete_user("invalid_id")
     }.to raise_error(ArgumentError, /Invalid id, 'invalid_id' is not a valid uuid/)
   end
 
-  # auth-py: test_generate_link_supports_sign_up_with_generate_confirmation_signup_link (test_gotrue_admin_api.py:268)
+  # Ported from: test_generate_link_supports_sign_up_with_generate_confirmation_signup_link
   it "generates signup confirmation link with user_metadata" do
     credentials = mock_user_credentials
     redirect_to = "http://localhost:9999/welcome"
@@ -310,7 +310,7 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.user_metadata).to eq(user_metadata)
   end
 
-  # auth-py: test_generate_link_supports_updating_emails_with_generate_email_change_links (test_gotrue_admin_api.py:286)
+  # Ported from: test_generate_link_supports_updating_emails_with_generate_email_change_links
   it "generates email change link" do
     credentials = mock_user_credentials
     user = create_new_user_with_email(email: credentials[:email])
@@ -329,7 +329,7 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.new_email).to eq(new_credentials[:email])
   end
 
-  # auth-py: test_invite_user_by_email_creates_a_new_user_with_an_invited_at_timestamp (test_gotrue_admin_api.py:306)
+  # Ported from: test_invite_user_by_email_creates_a_new_user_with_an_invited_at_timestamp
   it "invites user by email with invited_at timestamp" do
     credentials = mock_user_credentials
     redirect_to = "http://localhost:9999/welcome"
@@ -342,7 +342,7 @@ RSpec.describe "Admin API Spec" do
     expect(response.user.invited_at).to be_truthy
   end
 
-  # auth-py: test_sign_out_with_an_valid_access_token (test_gotrue_admin_api.py:320)
+  # Ported from: test_sign_out_with_an_valid_access_token
   it "signs out with valid token" do
     credentials = mock_user_credentials
     response = auth_client_with_session.sign_up(
@@ -353,14 +353,14 @@ RSpec.describe "Admin API Spec" do
     service_role_api_client.sign_out(response.session.access_token)
   end
 
-  # auth-py: test_sign_out_with_an_invalid_access_token (test_gotrue_admin_api.py:332)
+  # Ported from: test_sign_out_with_an_invalid_access_token
   it "raises AuthError for invalid token in sign_out" do
     expect {
       service_role_api_client.sign_out("this-is-a-bad-token")
     }.to raise_error(Supabase::Auth::Errors::AuthError)
   end
 
-  # auth-py: test_sign_in_with_id_token (test_gotrue_admin_api.py:372)
+  # Ported from: test_sign_in_with_id_token
   it "raises AuthApiError for sign_in_with_id_token" do
     expect {
       client_api_auto_confirm_off_signups_enabled_client.sign_in_with_id_token(
@@ -370,7 +370,7 @@ RSpec.describe "Admin API Spec" do
     }.to raise_error(Supabase::Auth::Errors::AuthApiError)
   end
 
-  # auth-py: test_sign_in_with_sso (test_gotrue_admin_api.py:384)
+  # Ported from: test_sign_in_with_sso
   it "raises AuthApiError with SAML 2.0 disabled message for sign_in_with_sso" do
     expect {
       client_api_auto_confirm_off_signups_enabled_client.sign_in_with_sso(
@@ -379,7 +379,7 @@ RSpec.describe "Admin API Spec" do
     }.to raise_error(Supabase::Auth::Errors::AuthApiError, /SAML 2.0 is disabled/)
   end
 
-  # auth-py: test_sign_in_with_oauth (test_gotrue_admin_api.py:394)
+  # Ported from: test_sign_in_with_oauth
   it "returns OAuthResponse for sign_in_with_oauth" do
     response = client_api_auto_confirm_off_signups_enabled_client.sign_in_with_oauth(
       provider: "google"
@@ -388,7 +388,7 @@ RSpec.describe "Admin API Spec" do
     expect(response).to be_a(Supabase::Auth::Types::OAuthResponse)
   end
 
-  # auth-py: test_link_identity_missing_session (test_gotrue_admin_api.py:402)
+  # Ported from: test_link_identity_missing_session
   it "raises AuthSessionMissingError for link_identity without session" do
     expect {
       client_api_auto_confirm_off_signups_enabled_client.link_identity(
@@ -397,7 +397,7 @@ RSpec.describe "Admin API Spec" do
     }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
   end
 
-  # auth-py: test_get_item_from_memory_storage (test_gotrue_admin_api.py:412)
+  # Ported from: test_get_item_from_memory_storage
   it "stores session in memory storage after sign-in" do
     credentials = mock_user_credentials
     client = auth_client
@@ -406,7 +406,7 @@ RSpec.describe "Admin API Spec" do
     expect(client._storage.get_item(client._storage_key)).not_to be_nil
   end
 
-  # auth-py: test_remove_item_from_memory_storage (test_gotrue_admin_api.py:431)
+  # Ported from: test_remove_item_from_memory_storage
   it "removes session from memory storage" do
     credentials = mock_user_credentials
     client = auth_client
@@ -416,7 +416,7 @@ RSpec.describe "Admin API Spec" do
     expect(client._storage.get_item(client._storage_key)).to be_nil
   end
 
-  # auth-py: test_start_auto_refresh_token (test_gotrue_admin_api.py:472)
+  # Ported from: test_start_auto_refresh_token
   it "starts auto-refresh token timer" do
     credentials = mock_user_credentials
     client = auth_client
@@ -426,7 +426,7 @@ RSpec.describe "Admin API Spec" do
     expect(client._start_auto_refresh_token(2.0)).to be_nil
   end
 
-  # auth-py: test_recover_and_refresh (test_gotrue_admin_api.py:493)
+  # Ported from: test_recover_and_refresh
   it "recovers and refreshes session from storage" do
     credentials = mock_user_credentials
     client = auth_client
@@ -437,7 +437,7 @@ RSpec.describe "Admin API Spec" do
     expect(client._storage.get_item(client._storage_key)).not_to be_nil
   end
 
-  # auth-py: test_list_factors (test_gotrue_admin_api.py:451)
+  # Ported from: test_list_factors
   it "lists factors with totp and phone arrays" do
     credentials = mock_user_credentials
     client = auth_client
@@ -449,7 +449,7 @@ RSpec.describe "Admin API Spec" do
     expect(factors.phone).to be_a(Array)
   end
 
-  # auth-py: test_get_user_identities (test_gotrue_admin_api.py:514)
+  # Ported from: test_get_user_identities
   it "gets user identities with email in identity_data" do
     credentials = mock_user_credentials
     client = auth_client
@@ -459,7 +459,7 @@ RSpec.describe "Admin API Spec" do
     expect(identities_response.identities[0].identity_data["email"]).to eq(credentials[:email])
   end
 
-  # auth-py: test_update_user (test_gotrue_admin_api.py:536)
+  # Ported from: test_update_user
   it "updates user password and signs in with new password" do
     credentials = mock_user_credentials
     client = auth_client
@@ -468,14 +468,14 @@ RSpec.describe "Admin API Spec" do
     client.sign_in_with_password(email: credentials[:email], password: "123e5a")
   end
 
-  # auth-py: test_list_factors_invalid_id_raises_error (test_gotrue_admin_api.py:619)
+  # Ported from: test_list_factors_invalid_id_raises_error
   it "raises ArgumentError for invalid UUID in admin list_factors" do
     expect {
       service_role_api_client._list_factors(user_id: "invalid_id")
     }.to raise_error(ArgumentError, /Invalid id, 'invalid_id' is not a valid uuid/)
   end
 
-  # auth-py: test_delete_factor_invalid_id_raises_error (test_gotrue_admin_api.py:626)
+  # Ported from: test_delete_factor_invalid_id_raises_error
   it "raises ArgumentError for invalid user_id or factor_id in admin delete_factor" do
     # invalid user id
     expect {
@@ -488,7 +488,7 @@ RSpec.describe "Admin API Spec" do
     }.to raise_error(ArgumentError, /Invalid id, 'invalid_id' is not a valid uuid/)
   end
 
-  # auth-py: test_weak_email_password_error (test_gotrue_admin_api.py:570)
+  # Ported from: test_weak_email_password_error
   # Python catches (AuthWeakPasswordError, AuthApiError) — both are subclasses of AuthError
   it "raises weak password error for email signup with short password" do
     credentials = mock_user_credentials
@@ -503,7 +503,7 @@ RSpec.describe "Admin API Spec" do
     end
   end
 
-  # auth-py: test_weak_phone_password_error (test_gotrue_admin_api.py:583)
+  # Ported from: test_weak_phone_password_error
   # Python catches (AuthWeakPasswordError, AuthApiError) — both are subclasses of AuthError
   it "raises weak password error for phone signup with short password" do
     credentials = mock_user_credentials

@@ -268,7 +268,7 @@ RSpec.describe "Error retry logic" do
 
       # A retry timer should have been created with RETRY_INTERVAL-based duration
       expect(retry_interval).not_to be_nil
-      # The interval uses RETRY_INTERVAL ** (network_retries * 100) / 1000.0
+      # The interval uses 200 * RETRY_INTERVAL ** (network_retries - 1) / 1000.0
       expect(retry_interval).to be_a(Numeric)
     end
   end

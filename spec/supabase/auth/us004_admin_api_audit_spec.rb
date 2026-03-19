@@ -6,7 +6,7 @@ require "json"
 require "securerandom"
 
 # US-004: Audit Admin API Methods
-# Verifies that Ruby Admin API methods match Python (auth-py) behavior:
+# Verifies that Ruby Admin API methods match Python behavior:
 #   - create_user sends POST to /admin/users with AdminUserAttributes
 #   - list_users supports page/per_page pagination params
 #   - get_user_by_id validates UUID format

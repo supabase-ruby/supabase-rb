@@ -9,7 +9,7 @@ RSpec.describe Supabase::Auth::Client do
     WebMock.allow_net_connect! if defined?(WebMock)
   end
 
-  # auth-py: test_get_claims_returns_none_when_session_is_none (test_gotrue.py:24)
+  # Ported from: test_get_claims_returns_none_when_session_is_none
   describe "#get_claims" do
     it "returns nil when session is nil" do
       client = auth_client
@@ -18,7 +18,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_get_claims_calls_get_user_if_symmetric_jwt (test_gotrue.py:29)
+  # Ported from: test_get_claims_calls_get_user_if_symmetric_jwt
   describe "#get_claims with symmetric JWT" do
     it "calls get_user for symmetric JWT" do
       client = auth_client
@@ -33,7 +33,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_get_claims_fetches_jwks_to_verify_asymmetric_jwt (test_gotrue.py:41)
+  # Ported from: test_get_claims_fetches_jwks_to_verify_asymmetric_jwt
   describe "#get_claims with asymmetric JWT" do
     it "fetches JWKS to verify asymmetric JWT" do
       client = auth_client_with_asymmetric_session
@@ -54,7 +54,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_jwks_ttl_cache_behavior (test_gotrue.py:61)
+  # Ported from: test_jwks_ttl_cache_behavior
   describe "#get_claims JWKS TTL cache" do
     it "caches JWKS with TTL behavior" do
       client = auth_client_with_asymmetric_session
@@ -80,7 +80,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_set_session_with_valid_tokens (test_gotrue.py:92)
+  # Ported from: test_set_session_with_valid_tokens
   describe "#set_session" do
     it "sets session with valid tokens" do
       client = auth_client
@@ -104,7 +104,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_set_session_with_expired_token (test_gotrue.py:123)
+  # Ported from: test_set_session_with_expired_token
   describe "#set_session with expired token" do
     it "refreshes with expired token" do
       client = auth_client
@@ -136,7 +136,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_set_session_without_refresh_token (test_gotrue.py:163)
+  # Ported from: test_set_session_without_refresh_token
   describe "#set_session without refresh token" do
     it "raises AuthSessionMissingError for expired token without refresh token" do
       client = auth_client
@@ -160,7 +160,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_set_session_with_invalid_token (test_gotrue.py:196)
+  # Ported from: test_set_session_with_invalid_token
   describe "#set_session with invalid token" do
     it "raises AuthInvalidJwtError for invalid token" do
       client = auth_client
@@ -169,7 +169,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_mfa_enroll (test_gotrue.py:204)
+  # Ported from: test_mfa_enroll
   describe "#mfa.enroll" do
     it "enrolls TOTP factor" do
       client = auth_client_with_session
@@ -190,7 +190,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_mfa_challenge (test_gotrue.py:228)
+  # Ported from: test_mfa_challenge
   describe "#mfa.challenge" do
     it "creates challenge" do
       client = auth_client
@@ -211,7 +211,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_mfa_unenroll (test_gotrue.py:252)
+  # Ported from: test_mfa_unenroll
   describe "#mfa.unenroll" do
     it "unenrolls factor" do
       client = auth_client
@@ -231,7 +231,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_mfa_list_factors (test_gotrue.py:275)
+  # Ported from: test_mfa_list_factors
   describe "#mfa.list_factors" do
     it "lists factors" do
       client = auth_client
@@ -251,7 +251,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_initialize_from_url (test_gotrue.py:298)
+  # Ported from: test_initialize_from_url
   describe "#initialize_from_url" do
     it "handles implicit grant flow detection, session initialization, errors, and no-op" do
       client = auth_client
@@ -316,7 +316,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_exchange_code_for_session (test_gotrue.py:393)
+  # Ported from: test_exchange_code_for_session
   describe "#exchange_code_for_session (PKCE)" do
     it "verifies code_challenge and code_challenge_method params are set and code_verifier is stored" do
       client = auth_client
@@ -341,7 +341,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_get_authenticator_assurance_level (test_gotrue.py:420)
+  # Ported from: test_get_authenticator_assurance_level
   describe "#mfa.get_authenticator_assurance_level" do
     it "returns authenticator assurance level" do
       client = auth_client
@@ -363,7 +363,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_link_identity (test_gotrue.py:445)
+  # Ported from: test_link_identity
   describe "#link_identity" do
     it "constructs OAuth URL for identity linking" do
       client = auth_client
@@ -387,7 +387,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_get_user_identities (test_gotrue.py:480)
+  # Ported from: test_get_user_identities
   describe "#get_user_identities" do
     it "gets user identities" do
       client = auth_client
@@ -402,7 +402,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_unlink_identity (test_gotrue.py:500)
+  # Ported from: test_unlink_identity
   describe "#unlink_identity" do
     it "sends DELETE request to unlink identity" do
       client = auth_client
@@ -441,7 +441,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_verify_otp (test_gotrue.py:557)
+  # Ported from: test_verify_otp
   describe "#verify_otp" do
     it "verifies OTP with correct params" do
       client = auth_client
@@ -520,7 +520,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_sign_in_with_password (test_gotrue.py:623)
+  # Ported from: test_sign_in_with_password
   describe "#sign_in_with_password" do
     it "signs in with password (success, wrong password, empty credentials)" do
       client = auth_client
@@ -556,7 +556,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_sign_in_with_otp (test_gotrue.py:674)
+  # Ported from: test_sign_in_with_otp
   describe "#sign_in_with_otp" do
     it "signs in with OTP (email, phone, missing credentials)" do
       client = auth_client
@@ -617,7 +617,7 @@ RSpec.describe Supabase::Auth::Client do
     end
   end
 
-  # auth-py: test_sign_out (test_gotrue.py:771)
+  # Ported from: test_sign_out
   describe "#sign_out" do
     it "handles global scope, local scope, others scope, no session, and admin error suppression" do
       mock_user = Supabase::Auth::Types::User.new(
