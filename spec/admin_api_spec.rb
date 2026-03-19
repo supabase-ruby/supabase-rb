@@ -257,11 +257,13 @@ RSpec.describe "Admin API Spec" do
   end
 
   # auth-py: test_reset_password_for_email (test_gotrue_admin_api.py:232)
-  it "raises AuthSessionMissingError for reset_password_email without session" do
+  # reset_password_email does not require an active session — it's a public endpoint
+  it "sends password reset email without requiring a session" do
     credentials = mock_user_credentials
+    create_new_user_with_email(email: credentials[:email])
     expect {
       auth_client_with_session.reset_password_email(email: credentials[:email])
-    }.to raise_error(Supabase::Auth::Errors::AuthSessionMissing)
+    }.not_to raise_error
   end
 
   # auth-py: test_sign_in_anonymously (test_gotrue_admin_api.py:251)
