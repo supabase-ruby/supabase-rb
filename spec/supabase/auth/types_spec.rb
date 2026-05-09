@@ -334,12 +334,12 @@ RSpec.describe Supabase::Auth::Types do
     end
 
     it "computes expires_at = round(time()) + expires_in when expires_at missing (matching Python validator)" do
-      before = Time.now.to_i
+      before = Time.now.round.to_i
       session = Supabase::Auth::Types::Session.from_hash(
         "access_token" => "t", "refresh_token" => "r", "token_type" => "bearer",
         "expires_in" => 3600, "user" => { "id" => "u1" }
       )
-      after = Time.now.to_i
+      after = Time.now.round.to_i
       expect(session.expires_at).to be_between(before + 3600, after + 3600)
       expect(session.expires_at).to be_a(Integer)
     end

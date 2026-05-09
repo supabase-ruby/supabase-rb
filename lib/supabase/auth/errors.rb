@@ -45,7 +45,7 @@ module Supabase
         end
 
         def to_h
-          { name: @name, message: message, status: @status }
+          { name: @name, message: message, status: @status, code: @code }
         end
       end
 
@@ -73,7 +73,7 @@ module Supabase
         end
 
         def to_h
-          { name: @name, message: message, status: @status, details: @details }
+          { name: @name, message: message, status: @status, code: @code, details: @details }
         end
       end
 
@@ -94,7 +94,7 @@ module Supabase
         end
 
         def to_h
-          { name: @name, message: message, status: @status, reasons: @reasons }
+          { name: @name, message: message, status: @status, code: @code, reasons: @reasons }
         end
       end
 

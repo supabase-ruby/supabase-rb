@@ -14,10 +14,16 @@ module Supabase
       # @param url [String] The GoTrue API base URL
       # @param headers [Hash] Default headers to include on every request (e.g., apikey)
       # @param http_client [Faraday::Connection, nil] Optional custom Faraday client
-      def initialize(url:, headers: {}, http_client: nil)
+      # @param verify [Boolean] Verify TLS certificates (default true)
+      # @param proxy [String, nil] HTTP proxy URL
+      # @param timeout [Numeric, nil] Per-request timeout in seconds
+      def initialize(url:, headers: {}, http_client: nil, verify: true, proxy: nil, timeout: nil)
         @url = url
         @headers = headers
         @http_client = http_client
+        @verify = verify
+        @proxy = proxy
+        @timeout = timeout
       end
 
       # Central HTTP dispatch method. Builds URL, merges headers (including API version
@@ -92,8 +98,12 @@ module Supabase
       end
 
       def build_connection
-        Faraday.new(url: @url) do |f|
+        Faraday.new(url: @url, ssl: { verify: @verify }, proxy: @proxy) do |f|
           f.response :raise_error
+          if @timeout
+            f.options.timeout = @timeout
+            f.options.open_timeout = @timeout
+          end
           f.adapter Faraday.default_adapter
         end
       end

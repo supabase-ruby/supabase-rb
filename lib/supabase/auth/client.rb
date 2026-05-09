@@ -48,6 +48,9 @@ module Supabase
         @storage_key = opts[:storage_key] || STORAGE_KEY
         @storage = opts[:storage] || MemoryStorage.new
         @http_client = opts[:http_client]
+        @verify = opts.fetch(:verify, true)
+        @proxy = opts[:proxy]
+        @timeout = opts[:timeout]
 
         @current_session = nil
         @jwks = { "keys" => [] }
@@ -56,8 +59,10 @@ module Supabase
         @refresh_token_timer = nil
         @network_retries = 0
 
-        @api = Api.new(url: @url, headers: @headers, http_client: @http_client)
-        @admin = AdminApi.new(url: @url, headers: @headers, http_client: @http_client)
+        @api = Api.new(url: @url, headers: @headers, http_client: @http_client,
+                       verify: @verify, proxy: @proxy, timeout: @timeout)
+        @admin = AdminApi.new(url: @url, headers: @headers, http_client: @http_client,
+                              verify: @verify, proxy: @proxy, timeout: @timeout)
         @mfa = MFAApi.new(self)
       end
 
@@ -262,7 +267,7 @@ module Supabase
         end
         return nil unless current_session
 
-        time_now = Time.now.to_i
+        time_now = Time.now.round.to_i
         has_expired = current_session.expires_at ? current_session.expires_at <= time_now + EXPIRY_MARGIN : false
 
         if has_expired
@@ -307,7 +312,7 @@ module Supabase
       # @raise [Errors::AuthInvalidJwtError] if token is malformed
       # @raise [Errors::AuthSessionMissing] if token expired and no refresh token
       def set_session(access_token, refresh_token)
-        time_now = Time.now.to_i
+        time_now = Time.now.round.to_i
         expires_at = time_now
         has_expired = true
         session = nil
@@ -813,7 +818,7 @@ module Supabase
           return
         end
 
-        time_now = Time.now.to_i
+        time_now = Time.now.round.to_i
         expires_at = current_session.expires_at
         expires_at = expires_at.to_i if expires_at
 
@@ -888,7 +893,7 @@ module Supabase
 
         expire_at = session.expires_at
         if expire_at
-          time_now = Time.now.to_i
+          time_now = Time.now.round.to_i
           expire_in = expire_at - time_now
           refresh_duration_before_expires = expire_in > EXPIRY_MARGIN ? EXPIRY_MARGIN : 0.5
           value = (expire_in - refresh_duration_before_expires) * 1000
@@ -1011,7 +1016,7 @@ module Supabase
         token_type = params["token_type"]
         raise Errors::AuthImplicitGrantRedirectError.new("No token_type detected.") unless token_type
 
-        time_now = Time.now.to_i
+        time_now = Time.now.round.to_i
         expires_at = time_now + expires_in
 
         user_response = get_user(access_token)

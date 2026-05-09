@@ -139,7 +139,7 @@ RSpec.describe "US-006: Type Definitions Audit" do
   # ─── AC-2: Session struct computes expires_at from expires_in ───
   describe "AC-2: Session expires_at computation" do
     it "computes expires_at from expires_in when expires_at is missing (matches Python validator)" do
-      before = Time.now.to_i
+      before = Time.now.round.to_i
       session = Supabase::Auth::Types::Session.from_hash({
         "access_token" => "at",
         "refresh_token" => "rt",
@@ -147,10 +147,9 @@ RSpec.describe "US-006: Type Definitions Audit" do
         "expires_in" => 3600,
         "user" => { "id" => "u1" }
       })
-      after = Time.now.to_i
+      after = Time.now.round.to_i
 
-      # Python: round(time()) + expires_in
-      # Ruby: Time.now.to_i + expires_in.to_i
+      # Both Python and Ruby: round(now) + expires_in
       expect(session.expires_at).to be_between(before + 3600, after + 3600)
     end
 

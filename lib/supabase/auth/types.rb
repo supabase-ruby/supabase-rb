@@ -158,7 +158,7 @@ module Supabase
           expires_at = hash["expires_at"] || hash[:expires_at]
           expires_in = hash["expires_in"] || hash[:expires_in]
           if expires_in && !expires_at
-            expires_at = Time.now.to_i + expires_in.to_i
+            expires_at = Time.now.round.to_i + expires_in.to_i
           end
           expires_at = expires_at.to_i if expires_at
 

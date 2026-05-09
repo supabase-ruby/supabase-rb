@@ -12,7 +12,6 @@ module Supabase
     module Helpers
       API_VERSION_HEADER_NAME = "X-Supabase-Api-Version"
       API_VERSION_REGEX = /\A2[0-9]{3}-(0[1-9]|1[0-2])-(0[1-9]|1[0-9]|2[0-9]|3[0-1])\z/
-      BASE64URL_REGEX = /\A([a-z0-9_-]{4})*($|[a-z0-9_-]{3}$|[a-z0-9_-]{2}$)\z/i
       PKCE_CHARSET = (("a".."z").to_a + ("A".."Z").to_a + ("0".."9").to_a + %w[- . _ ~]).freeze
       API_VERSION_2024_01_01_TIMESTAMP = Time.new(2024, 1, 1).to_f
 
@@ -23,7 +22,7 @@ module Supabase
         raise Errors::AuthInvalidJwtError, "Invalid JWT structure" unless parts.length == 3
 
         parts.each do |part|
-          raise Errors::AuthInvalidJwtError, "JWT not in base64url format" unless part.match?(BASE64URL_REGEX)
+          raise Errors::AuthInvalidJwtError, "JWT not in base64url format" unless part.match?(Constants::BASE64URL_REGEX)
         end
 
         header = JSON.parse(str_from_base64url(parts[0]))

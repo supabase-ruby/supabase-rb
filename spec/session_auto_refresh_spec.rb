@@ -135,7 +135,7 @@ RSpec.describe "Session auto-refresh" do
         access_token: "short-token",
         refresh_token: "short-refresh",
         expires_in: 5,
-        expires_at: Time.now.to_i + 5,
+        expires_at: Time.now.round.to_i + 5,
         token_type: "bearer",
         user: mock_user
       )

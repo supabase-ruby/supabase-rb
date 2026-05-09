@@ -151,11 +151,11 @@ RSpec.describe Supabase::Auth::Client, "initialization flow" do
     end
 
     it "computes expires_at from expires_in" do
-      # Python: expires_at = time_now + int(expires_in)
+      # Python: expires_at = round(time()) + int(expires_in)
       client = described_class.new(url: url, headers: headers)
-      before_time = Time.now.to_i
+      before_time = Time.now.round.to_i
       client.initialize_from_url(base_url)
-      after_time = Time.now.to_i
+      after_time = Time.now.round.to_i
 
       session = client.get_session
       expect(session.expires_at).to be_between(
