@@ -2,4 +2,9 @@
 
 source "https://rubygems.org"
 
-gemspec
+gemspec name: "supabase-auth"
+gemspec name: "supabase-postgrest"
+gemspec name: "supabase-storage"
+gemspec name: "supabase-functions"
+gemspec name: "supabase-realtime"
+gemspec name: "supabase"
