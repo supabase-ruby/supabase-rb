@@ -337,18 +337,24 @@ Errors raise `FunctionsHttpError` (function-side) or `FunctionsRelayError`
 Implements the [Phoenix Channels](https://hexdocs.pm/phoenix/channels.html)
 protocol against a **pluggable Socket interface**. The protocol + dispatch
 (channel state machine, presence sync, listener routing, push/reply tracking)
-is fully implemented and tested. A real WebSocket transport — sync via
-`websocket-client-simple`, async via `async-websocket`, or your own — plugs in
-through the `Supabase::Realtime::Socket` interface.
+is fully implemented and tested. A real WebSocket transport plugs in through
+the `Supabase::Realtime::Socket` interface; the gem ships one production
+adapter built on `websocket-client-simple`.
 
 This mirrors `supabase-py`'s decision to ship sync realtime as
 `NotImplementedError`: WebSocket I/O is fundamentally event-driven and a
-naive sync wrapper is more harmful than no wrapper at all.
+naive sync wrapper is more harmful than no wrapper at all. The
+websocket-client-simple adapter runs the read loop on a background thread,
+which means listener callbacks fire on that thread — bring your own
+thread-safety to anything they touch.
 
 ```ruby
 require "supabase/realtime"
+require "supabase/realtime/sockets/websocket_client_simple"
 
-socket = MyWebSocketAdapter.new  # implements Supabase::Realtime::Socket
+socket = Supabase::Realtime::Sockets::WebsocketClientSimple.new(
+  url: "wss://your-project.supabase.co/realtime/v1/websocket?apikey=#{key}"
+)
 client = Supabase::Realtime::Client.new(
   url:    "wss://your-project.supabase.co/realtime/v1",
   params: { apikey: key, access_token: jwt },

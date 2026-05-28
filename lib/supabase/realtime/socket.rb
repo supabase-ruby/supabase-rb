@@ -29,10 +29,12 @@ module Supabase
       def on_message(&blk); message_callbacks << blk; end
       def on_open(&blk);    open_callbacks    << blk; end
       def on_close(&blk);   close_callbacks   << blk; end
+      def on_error(&blk);   error_callbacks   << blk; end
 
       def message_callbacks; @message_callbacks ||= []; end
       def open_callbacks;    @open_callbacks    ||= []; end
       def close_callbacks;   @close_callbacks   ||= []; end
+      def error_callbacks;   @error_callbacks   ||= []; end
     end
   end
 end
