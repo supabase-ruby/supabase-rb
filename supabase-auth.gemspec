@@ -11,13 +11,13 @@ Gem::Specification.new do |spec|
   spec.summary = "Ruby client for Supabase Auth (GoTrue API)"
   spec.description = "A Ruby gem implementing a client for Supabase Auth (GoTrue API), " \
                      "with adaptations for Ruby idioms."
-  spec.homepage = "https://github.com/suparails/supabase-auth"
+  spec.homepage = "https://github.com/supabase-rb/client"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/suparails/supabase-auth"
-  spec.metadata["changelog_uri"] = "https://github.com/suparails/supabase-auth/blob/main/CHANGELOG.md"
+  spec.metadata["source_code_uri"] = "https://github.com/supabase-rb/client"
+  spec.metadata["changelog_uri"] = "https://github.com/supabase-rb/client/blob/master/CHANGELOG.md"
 
   spec.files = Dir[
     "lib/supabase-auth.rb",
