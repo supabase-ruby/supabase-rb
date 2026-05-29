@@ -3,27 +3,35 @@
 [![Ruby](https://img.shields.io/badge/ruby-%3E%3D%203.0-red)](https://www.ruby-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Ruby monorepo for all [Supabase](https://supabase.com) libraries. Mirrors the
-public surface of [`supabase-py`](https://github.com/supabase/supabase-py)
-so anyone porting from Python (or reading the Python docs) can find the
-Ruby equivalent by name.
+Ruby client for [Supabase](https://supabase.com). Single gem packaging Auth,
+PostgREST, Storage, Edge Functions, and Realtime behind one
+`Supabase.create_client` factory — mirroring
+[`supabase-py`](https://github.com/supabase/supabase-py)'s `create_client()`.
 
-- [supabase-rb](lib/supabase/README.md) — umbrella
-- [supabase-auth](lib/supabase/auth/README.md)
-- [supabase-postgrest](lib/supabase/postgrest/README.md)
-- [supabase-storage](lib/supabase/storage/README.md)
-- [supabase-functions](lib/supabase/functions/README.md)
-- [supabase-realtime](lib/supabase/realtime/README.md)
+```ruby
+gem "supabase-rb"
+```
 
-Currently on RubyGems:
-[`supabase-rb`](https://rubygems.org/gems/supabase-rb) (umbrella) and
-[`supabase-auth`](https://rubygems.org/gems/supabase-auth).
-The remaining sub-gems are released individually as they stabilize.
+```ruby
+require "supabase"
+client = Supabase.create_client(supabase_url: ENV["SUPABASE_URL"],
+                                supabase_key: ENV["SUPABASE_ANON_KEY"])
+```
+
+Module references (the Ruby port mirrors `supabase-py`'s module layout):
+
+- [Umbrella](lib/supabase/README.md)
+- [Auth](lib/supabase/auth/README.md)
+- [PostgREST](lib/supabase/postgrest/README.md)
+- [Storage](lib/supabase/storage/README.md)
+- [Edge Functions](lib/supabase/functions/README.md)
+- [Realtime](lib/supabase/realtime/README.md)
 
 Relevant links:
 
+- Gem: [rubygems.org/gems/supabase-rb](https://rubygems.org/gems/supabase-rb)
 - Documentation: [supabase.com/docs](https://supabase.com/docs/reference)
-- Upstream Python monorepo: [supabase/supabase-py](https://github.com/supabase/supabase-py)
+- Upstream Python source: [supabase/supabase-py](https://github.com/supabase/supabase-py)
 
 ## Local Development
 
@@ -45,9 +53,8 @@ cd supabase-rb
 bundle install
 ```
 
-The repo's `Gemfile` loads all six sub-gemspecs at once. To consume sub-gems
-individually in your own project, depend on them by name (see each sub-gem's
-README).
+The repo's `Gemfile` loads the single `supabase-rb` gemspec, which packages
+every module under `lib/supabase/`.
 
 ### Running tests
 

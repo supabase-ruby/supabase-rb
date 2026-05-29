@@ -79,14 +79,12 @@ Sub-client URLs are derived from the project URL:
 | Functions | `<project>/functions/v1` |
 | Realtime  | `wss://<host>/realtime/v1/websocket` |
 
-## Sub-gems
+## Modules
 
-If you only need one piece, depend on the sub-gem directly:
+`supabase-rb` packages every module in one gem. Per-module references:
 
-- [`supabase-auth`](https://rubygems.org/gems/supabase-auth)
-- `supabase-postgrest`
-- `supabase-storage`
-- `supabase-functions`
-- `supabase-realtime`
-
-See each sub-gem's README for its public surface and examples.
+- [Auth](auth/README.md)
+- [PostgREST](postgrest/README.md)
+- [Storage](storage/README.md)
+- [Edge Functions](functions/README.md)
+- [Realtime](realtime/README.md)

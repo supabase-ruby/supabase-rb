@@ -7,6 +7,15 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ## [Unreleased]
 
+## [2.0.0] — Single fat gem
+
+**Breaking.** `supabase-rb` is now a single self-contained gem packaging Auth,
+PostgREST, Storage, Edge Functions, and Realtime. The previous meta-gem layout
+(`supabase-rb` 1.0.0 depending on `supabase-auth`/`-postgrest`/`-storage`/
+`-functions`/`-realtime` sub-gems) is gone, along with the five sub-gemspecs.
+`supabase-auth` 0.x has been yanked from RubyGems. The Ruby API (`require
+"supabase"`, `Supabase.create_client`, all module classes) is unchanged.
+
 ## [1.0.0] — Umbrella renamed to `supabase-rb`
 
 The umbrella gem is now published as `supabase-rb` (the bare `supabase` name on

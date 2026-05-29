@@ -8,11 +8,10 @@ Gem::Specification.new do |spec|
   spec.authors = ["Supabase"]
   spec.email = ["support@supabase.io"]
 
-  spec.summary = "Ruby client for Supabase (umbrella gem)"
-  spec.description = "Meta-gem combining supabase-auth, supabase-postgrest, supabase-storage, " \
-                     "supabase-functions, and supabase-realtime behind a single " \
-                     "Supabase.create_client(supabase_url:, supabase_key:) factory, mirroring " \
-                     "supabase-py's create_client()."
+  spec.summary = "Ruby client for Supabase"
+  spec.description = "Ruby client for Supabase: Auth, PostgREST, Storage, Edge Functions, and " \
+                     "Realtime exposed through a single Supabase.create_client(supabase_url:, " \
+                     "supabase_key:) factory, mirroring supabase-py's create_client()."
   spec.homepage = "https://github.com/supabase-ruby/supabase-rb"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0.0"
@@ -22,24 +21,26 @@ Gem::Specification.new do |spec|
   spec.metadata["documentation_uri"] = "https://github.com/supabase-ruby/supabase-rb/blob/master/lib/supabase/README.md"
   spec.metadata["changelog_uri"] = "https://github.com/supabase-ruby/supabase-rb/blob/master/CHANGELOG.md"
 
-  spec.post_install_message = <<~MSG
-    supabase-rb is the umbrella Ruby client for Supabase.
-    The Ruby require path is unchanged: `require "supabase"`.
-    (The bare `supabase` gem name on RubyGems belongs to an unrelated project.)
-  MSG
-
-  spec.files = Dir["lib/supabase.rb", "lib/supabase/version.rb", "lib/supabase/client.rb",
-                   "lib/supabase/client_options.rb",
-                   "LICENSE", "lib/supabase/README.md"]
+  spec.files = Dir[
+    "lib/supabase.rb",
+    "lib/supabase-auth.rb",
+    "lib/supabase/**/*.rb",
+    "lib/supabase/README.md",
+    "lib/supabase/**/README.md",
+    "LICENSE"
+  ]
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "supabase-auth",      "~> 0.1"
-  spec.add_dependency "supabase-postgrest", "~> 0.1"
-  spec.add_dependency "supabase-storage",   "~> 0.1"
-  spec.add_dependency "supabase-functions", "~> 0.1"
-  spec.add_dependency "supabase-realtime",  "~> 0.1"
+  spec.add_dependency "faraday", "~> 2.0"
+  spec.add_dependency "faraday-multipart", "~> 1.0"
+  spec.add_dependency "jwt", "~> 2.8"
 
   spec.add_development_dependency "rspec", "~> 3.12"
   spec.add_development_dependency "simplecov", "~> 0.22"
   spec.add_development_dependency "webmock", "~> 3.19"
+  spec.add_development_dependency "faker", "~> 3.2"
+  spec.add_development_dependency "async", "~> 2.0"
+  spec.add_development_dependency "async-http-faraday", "~> 0.20"
+  spec.add_development_dependency "websocket-client-simple", "~> 0.9"
+  spec.add_development_dependency "async-websocket", "~> 0.30"
 end

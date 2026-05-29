@@ -29,7 +29,7 @@ When making pull requests to the repository, follow these guidelines for both bu
 
 ## Local development
 
-The Ruby port is a polyrepo-as-monorepo: each subdirectory under `lib/supabase/` corresponds to one Python `src/<module>/`, and each has its own gemspec at the repo root (`supabase-auth.gemspec`, `supabase-postgrest.gemspec`, etc.).
+The Ruby port ships as a single `supabase-rb` gem. Each subdirectory under `lib/supabase/` corresponds to one Python `src/<module>/` from `supabase-py`.
 
 ```sh
 bundle install
@@ -37,4 +37,4 @@ bundle exec rspec
 bundle exec rubocop
 ```
 
-When porting a new feature from `supabase-py`, prefer mirroring the Python file layout under `lib/supabase/<module>/` and adding a matching spec under `spec/supabase/<module>/`. The umbrella gem (`supabase-rb.gemspec`) depends on each sub-gem, so changes to a sub-library are picked up automatically.
+When porting a new feature from `supabase-py`, prefer mirroring the Python file layout under `lib/supabase/<module>/` and adding a matching spec under `spec/supabase/<module>/`. The single `supabase-rb.gemspec` packages every module, so changes anywhere under `lib/supabase/` ship together.
