@@ -76,6 +76,26 @@ module Supabase
         _request(:post, ["object", "list", @id], json: body, headers: { "Content-Type" => "application/json" })
       end
 
+      # Cursor-paginated list. Mirrors storage3's list_v2 — only sends the keys the
+      # caller passed (no DEFAULT_SEARCH_OPTIONS merge).
+      # @param prefix [String, nil]
+      # @param limit  [Integer, nil]
+      # @param cursor [String, nil] opaque cursor returned by a previous call
+      # @param with_delimiter [Boolean, nil] if true, server groups by "/" into folders
+      # @param sort_by [Hash, nil] {column:, order:}
+      # @return [Types::SearchV2Result]
+      def list_v2(prefix: nil, limit: nil, cursor: nil, with_delimiter: nil, sort_by: nil)
+        body = {}
+        body["prefix"]         = prefix         unless prefix.nil?
+        body["limit"]          = limit          unless limit.nil?
+        body["cursor"]         = cursor         unless cursor.nil?
+        body["with_delimiter"] = with_delimiter unless with_delimiter.nil?
+        body["sortBy"]         = stringify_sort_by(sort_by) if sort_by
+        data = _request(:post, ["object", "list-v2", @id], json: body,
+                                                           headers: { "Content-Type" => "application/json" })
+        Types::SearchV2Result.from_hash(data)
+      end
+
       # ----- Remove / Move / Copy / Info / Exists -----
 
       def remove(paths)

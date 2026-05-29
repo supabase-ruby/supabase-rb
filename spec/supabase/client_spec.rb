@@ -23,9 +23,14 @@ RSpec.describe Supabase::Client do
   describe "#initialize" do
     it "requires both URL and key" do
       expect { described_class.new(supabase_url: "", supabase_key: key) }
-        .to raise_error(ArgumentError, /supabase_url/)
+        .to raise_error(Supabase::SupabaseException, /supabase_url/)
       expect { described_class.new(supabase_url: project_url, supabase_key: "") }
-        .to raise_error(ArgumentError, /supabase_key/)
+        .to raise_error(Supabase::SupabaseException, /supabase_key/)
+    end
+
+    it "rejects URLs without an http(s) scheme (mirrors supabase-py's Invalid URL check)" do
+      expect { described_class.new(supabase_url: "not-a-url", supabase_key: key) }
+        .to raise_error(Supabase::SupabaseException, /Invalid URL/)
     end
 
     it "strips a trailing slash from the project URL" do

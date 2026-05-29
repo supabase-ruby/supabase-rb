@@ -26,8 +26,12 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rspec", "~> 3.12"
   spec.add_development_dependency "simplecov", "~> 0.22"
 
-  # Real WebSocket transport (lib/supabase/realtime/sockets/websocket_client_simple.rb).
-  # Not loaded by the default require "supabase/realtime" — users opt in by
-  # requiring the adapter file directly, which pulls in this gem.
+  # Real WebSocket transports. Neither is loaded by the default
+  # require "supabase/realtime" — users opt in by requiring the adapter file
+  # directly, which pulls in the corresponding gem.
+  #
+  #   require "supabase/realtime/sockets/websocket_client_simple" # sync, threaded
+  #   require "supabase/realtime/sockets/async_websocket"         # socketry/async
   spec.add_development_dependency "websocket-client-simple", "~> 0.9"
+  spec.add_development_dependency "async-websocket", "~> 0.30"
 end

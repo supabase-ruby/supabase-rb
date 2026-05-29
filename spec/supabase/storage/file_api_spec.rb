@@ -146,6 +146,50 @@ RSpec.describe Supabase::Storage::FileApi do
     end
   end
 
+  describe "#list_v2" do
+    it "POSTs /object/list-v2/<bucket> with only the keys the caller passed and returns a SearchV2Result" do
+      stub_request(:post, "#{base}/object/list-v2/avatars")
+        .with(body: JSON.generate(
+          "prefix"         => "folder/",
+          "limit"          => 50,
+          "cursor"         => "abc123",
+          "with_delimiter" => true,
+          "sortBy"         => { "column" => "created_at", "order" => "desc" }
+        ))
+        .to_return(status: 200, body: JSON.generate(
+          "hasNext"    => true,
+          "nextCursor" => "next-token",
+          "folders"    => [{ "key" => "folder/sub/", "name" => "sub" }],
+          "objects"    => [{ "id" => "1", "name" => "a.png", "key" => "folder/a.png",
+                             "metadata" => { "size" => 10 } }]
+        ))
+
+      result = bucket.list_v2(
+        prefix: "folder/", limit: 50, cursor: "abc123", with_delimiter: true,
+        sort_by: { column: "created_at", order: "desc" }
+      )
+
+      expect(result).to be_a(Supabase::Storage::Types::SearchV2Result)
+      expect(result.has_next).to be(true)
+      expect(result.hasNext).to be(true)
+      expect(result.next_cursor).to eq("next-token")
+      expect(result.folders.first.key).to eq("folder/sub/")
+      expect(result.objects.first.name).to eq("a.png")
+      expect(result.objects.first.metadata).to eq("size" => 10)
+    end
+
+    it "sends an empty body when no options are passed" do
+      stub_request(:post, "#{base}/object/list-v2/avatars")
+        .with(body: "{}")
+        .to_return(status: 200, body: JSON.generate("hasNext" => false, "folders" => [], "objects" => []))
+
+      result = bucket.list_v2
+      expect(result.has_next).to be(false)
+      expect(result.folders).to eq([])
+      expect(result.objects).to eq([])
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Remove / Move / Copy / Info / Exists
   # ---------------------------------------------------------------------------

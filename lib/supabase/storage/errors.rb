@@ -22,6 +22,11 @@ module Supabase
           { "name" => "StorageApiError", "message" => message, "code" => @code, "status" => @status }
         end
       end
+
+      # Raised by the vectors client for client-side validation (e.g. batch size
+      # bounds). Mirrors storage3's VectorBucketException, which intentionally
+      # does NOT inherit from StorageError.
+      class VectorBucketException < StandardError; end
     end
   end
 end

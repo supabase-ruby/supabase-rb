@@ -5,6 +5,8 @@ require "faraday/multipart"
 
 require_relative "bucket_api"
 require_relative "file_api"
+require_relative "analytics"
+require_relative "vectors"
 require_relative "version"
 
 module Supabase
@@ -48,6 +50,18 @@ module Supabase
       end
 
       alias bucket from
+
+      # Iceberg / analytics bucket management. Mirrors storage3's
+      # `SyncStorageClient#analytics`.
+      def analytics
+        @analytics ||= AnalyticsClient.new(@session, @base_url, @headers)
+      end
+
+      # Vector bucket / index / record management. Mirrors storage3's
+      # `SyncStorageClient#vectors`.
+      def vectors
+        @vectors ||= VectorsClient.new(@session, @base_url, @headers)
+      end
 
       private
 

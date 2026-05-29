@@ -31,18 +31,29 @@ module Supabase
     attr_reader :supabase_url, :supabase_key, :options, :headers
 
     def initialize(supabase_url:, supabase_key:, options: {}, async: false)
-      raise ArgumentError, "supabase_url is required"  if supabase_url.to_s.empty?
-      raise ArgumentError, "supabase_key is required"  if supabase_key.to_s.empty?
+      # Use Supabase::SupabaseException once defined; fall back to ArgumentError
+      # during early require cycles. Matches supabase-py's contract.
+      err = defined?(Supabase::SupabaseException) ? Supabase::SupabaseException : ArgumentError
+      raise err, "supabase_url is required" if supabase_url.to_s.empty?
+      raise err, "supabase_key is required" if supabase_key.to_s.empty?
+      raise err, "Invalid URL" unless supabase_url.to_s.match?(%r{^https?://.+})
 
       @supabase_url = supabase_url.to_s.chomp("/")
       @supabase_key = supabase_key
       @options      = options || {}
       @async        = async
 
+      configured_headers =
+        if @options.is_a?(Supabase::ClientOptions)
+          @options.headers
+        else
+          @options[:global]&.dig(:headers) || @options.dig("global", "headers") || {}
+        end
+
       @headers = {
         "apikey"        => @supabase_key,
         "Authorization" => "Bearer #{@supabase_key}"
-      }.merge(@options[:global]&.dig(:headers) || @options.dig("global", "headers") || {})
+      }.merge(configured_headers || {})
     end
 
     def async?
@@ -154,7 +165,31 @@ module Supabase
     end
 
     def sub_options(key)
+      return options_from_struct(key) if @options.is_a?(Supabase::ClientOptions)
+
       (@options[key] || @options[key.to_s] || {}).transform_keys(&:to_sym)
+    end
+
+    # Translate a ClientOptions struct into the per-sub kwargs each sub-client
+    # accepts. We don't try to surface every field — only the ones the existing
+    # sub-clients actually take today.
+    def options_from_struct(key)
+      o = @options
+      case key
+      when :auth
+        { auto_refresh_token: o.auto_refresh_token, persist_session: o.persist_session,
+          storage: o.storage, flow_type: o.flow_type }.compact
+      when :postgrest
+        { schema: o.schema, timeout: o.postgrest_client_timeout, http_client: o.http_client }.compact
+      when :storage
+        { timeout: o.storage_client_timeout, http_client: o.http_client }.compact
+      when :functions
+        { timeout: o.function_client_timeout, http_client: o.http_client }.compact
+      when :realtime
+        o.realtime.is_a?(Hash) ? o.realtime.transform_keys(&:to_sym) : {}
+      else
+        {}
+      end
     end
   end
 
