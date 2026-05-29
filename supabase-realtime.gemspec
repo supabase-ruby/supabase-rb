@@ -13,14 +13,17 @@ Gem::Specification.new do |spec|
                      "server. Ships with a pluggable Socket interface and an in-memory " \
                      "TestSocket for unit tests. Real WebSocket transports (websocket-" \
                      "client-simple / async-websocket) plug in via the Socket interface."
-  spec.homepage = "https://github.com/suparails/supabase-rb"
+  spec.homepage = "https://github.com/supabase-rb/client"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/suparails/supabase-rb"
+  spec.metadata["source_code_uri"] = "https://github.com/supabase-rb/client"
+  spec.metadata["documentation_uri"] = "https://github.com/supabase-rb/client/blob/master/lib/supabase/realtime/README.md"
+  spec.metadata["changelog_uri"] = "https://github.com/supabase-rb/client/blob/master/CHANGELOG.md"
 
-  spec.files = Dir["lib/supabase/realtime.rb", "lib/supabase/realtime/**/*.rb", "LICENSE", "README.md"]
+  spec.files = Dir["lib/supabase/realtime.rb", "lib/supabase/realtime/**/*.rb",
+                   "lib/supabase/realtime/README.md", "LICENSE"]
   spec.require_paths = ["lib"]
 
   spec.add_development_dependency "rspec", "~> 3.12"

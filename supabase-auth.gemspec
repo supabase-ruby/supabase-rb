@@ -17,14 +17,15 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/supabase-rb/client"
+  spec.metadata["documentation_uri"] = "https://github.com/supabase-rb/client/blob/master/lib/supabase/auth/README.md"
   spec.metadata["changelog_uri"] = "https://github.com/supabase-rb/client/blob/master/CHANGELOG.md"
 
   spec.files = Dir[
     "lib/supabase-auth.rb",
     "lib/supabase/auth.rb",
     "lib/supabase/auth/**/*.rb",
-    "LICENSE",
-    "README.md"
+    "lib/supabase/auth/README.md",
+    "LICENSE"
   ]
   spec.require_paths = ["lib"]
 

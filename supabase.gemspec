@@ -13,15 +13,18 @@ Gem::Specification.new do |spec|
                      "supabase-functions, and supabase-realtime behind a single " \
                      "Supabase.create_client(supabase_url:, supabase_key:) factory, mirroring " \
                      "supabase-py's create_client()."
-  spec.homepage = "https://github.com/suparails/supabase-rb"
+  spec.homepage = "https://github.com/supabase-rb/client"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/suparails/supabase-rb"
+  spec.metadata["source_code_uri"] = "https://github.com/supabase-rb/client"
+  spec.metadata["documentation_uri"] = "https://github.com/supabase-rb/client/blob/master/lib/supabase/README.md"
+  spec.metadata["changelog_uri"] = "https://github.com/supabase-rb/client/blob/master/CHANGELOG.md"
 
   spec.files = Dir["lib/supabase.rb", "lib/supabase/version.rb", "lib/supabase/client.rb",
-                   "LICENSE", "README.md"]
+                   "lib/supabase/client_options.rb",
+                   "LICENSE", "lib/supabase/README.md"]
   spec.require_paths = ["lib"]
 
   spec.add_dependency "supabase-auth",      "~> 0.1"

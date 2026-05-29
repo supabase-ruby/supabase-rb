@@ -11,14 +11,17 @@ Gem::Specification.new do |spec|
   spec.summary = "Ruby client for the Supabase Storage API"
   spec.description = "A Ruby gem for the Supabase Storage REST API — bucket management, " \
                      "file upload/download, and signed URLs. Mirrors supabase-py's storage3."
-  spec.homepage = "https://github.com/suparails/supabase-rb"
+  spec.homepage = "https://github.com/supabase-rb/client"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/suparails/supabase-rb"
+  spec.metadata["source_code_uri"] = "https://github.com/supabase-rb/client"
+  spec.metadata["documentation_uri"] = "https://github.com/supabase-rb/client/blob/master/lib/supabase/storage/README.md"
+  spec.metadata["changelog_uri"] = "https://github.com/supabase-rb/client/blob/master/CHANGELOG.md"
 
-  spec.files = Dir["lib/supabase/storage.rb", "lib/supabase/storage/**/*.rb", "LICENSE", "README.md"]
+  spec.files = Dir["lib/supabase/storage.rb", "lib/supabase/storage/**/*.rb",
+                   "lib/supabase/storage/README.md", "LICENSE"]
   spec.require_paths = ["lib"]
 
   spec.add_dependency "faraday", "~> 2.0"
