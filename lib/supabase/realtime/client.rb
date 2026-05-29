@@ -28,13 +28,21 @@ module Supabase
     #   channel.on_postgres_changes("*", schema: "public", table: "users") { |p| puts p }
     #   channel.subscribe
     class Client
-      attr_reader :url, :params, :access_token, :channels, :socket, :timeout
+      attr_reader :url, :params, :access_token, :channels, :socket, :timeout,
+                  :heartbeat_interval, :auto_reconnect, :max_retries, :initial_backoff
 
       # @param url    [String] WebSocket endpoint (ws:// or wss://). Plain http(s) are upgraded.
       # @param params [Hash]   query-string params merged onto the URL (e.g. apikey/access_token)
       # @param socket [Socket, nil] inject your own transport (defaults to nil — caller wires it up)
       # @param timeout [Numeric] default per-push timeout (seconds)
-      def initialize(url:, params: {}, socket: nil, timeout: Types::DEFAULT_TIMEOUT_SECONDS)
+      # @param heartbeat_interval [Numeric] seconds between automatic heartbeat pushes (0 disables)
+      # @param auto_reconnect [Boolean] reconnect on unexpected socket close
+      # @param max_retries [Integer] maximum reconnect attempts before giving up
+      # @param initial_backoff [Numeric] seconds of delay before the first reconnect attempt;
+      #   doubles each attempt up to a 60s cap (matches supabase-py)
+      def initialize(url:, params: {}, socket: nil, timeout: Types::DEFAULT_TIMEOUT_SECONDS,
+                     heartbeat_interval: Types::DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
+                     auto_reconnect: true, max_retries: 5, initial_backoff: 1.0)
         @url     = normalize_url(url, params)
         @params  = params
         @access_token = params[:access_token] || params["access_token"]
@@ -42,6 +50,14 @@ module Supabase
         @socket   = socket
         @timeout  = timeout
         @ref      = 0
+
+        @heartbeat_interval = heartbeat_interval
+        @auto_reconnect     = auto_reconnect
+        @max_retries        = max_retries
+        @initial_backoff    = initial_backoff
+        @heartbeat_thread   = nil
+        @reconnect_thread   = nil
+        @intentionally_closed = false
 
         attach_socket if @socket
       end
@@ -56,11 +72,15 @@ module Supabase
       def connect
         raise Errors::RealtimeError, "no socket attached — call #use_socket(socket) first" unless @socket
 
+        @intentionally_closed = false
         @socket.connect
         self
       end
 
       def disconnect
+        @intentionally_closed = true
+        stop_reconnect
+        stop_heartbeat
         @socket&.close
         @channels.each_value { |ch| ch.instance_variable_set(:@state, Types::ChannelStates::CLOSED) }
         self
@@ -151,8 +171,87 @@ module Supabase
       private
 
       def attach_socket
-        @socket.on_message do |raw|
-          handle_inbound(raw)
+        @socket.on_message { |raw| handle_inbound(raw) }
+        @socket.on_open    { handle_socket_open }
+        @socket.on_close   { handle_socket_close }
+      end
+
+      def handle_socket_open
+        start_heartbeat
+        rejoin_channels
+      end
+
+      def handle_socket_close
+        stop_heartbeat
+        return if @intentionally_closed || !@auto_reconnect
+
+        schedule_reconnect
+      end
+
+      def start_heartbeat
+        return if @heartbeat_interval.nil? || @heartbeat_interval <= 0
+        return if @heartbeat_thread&.alive?
+
+        interval = @heartbeat_interval
+        @heartbeat_thread = Thread.new do
+          Thread.current.report_on_exception = false
+          loop do
+            sleep interval
+            break unless connected?
+
+            begin
+              send_heartbeat
+            rescue StandardError
+              # Swallow — a transient send error shouldn't kill the heartbeat loop.
+            end
+          end
+        end
+      end
+
+      def stop_heartbeat
+        thread = @heartbeat_thread
+        @heartbeat_thread = nil
+        thread.kill if thread && thread != Thread.current
+      end
+
+      def schedule_reconnect
+        return if @reconnect_thread&.alive?
+
+        initial   = @initial_backoff
+        max_tries = @max_retries
+
+        @reconnect_thread = Thread.new do
+          Thread.current.report_on_exception = false
+          retries = 0
+          while retries < max_tries
+            retries += 1
+            wait = [initial * (2**(retries - 1)), 60.0].min
+            sleep wait
+            break if @intentionally_closed
+
+            begin
+              @socket.connect
+              break # on_open will fire and restart heartbeat + rejoin channels
+            rescue StandardError
+              # Try again until max_retries is hit.
+            end
+          end
+          @reconnect_thread = nil
+        end
+      end
+
+      def stop_reconnect
+        thread = @reconnect_thread
+        @reconnect_thread = nil
+        thread.kill if thread && thread != Thread.current
+      end
+
+      def rejoin_channels
+        @channels.each_value do |channel|
+          next unless channel.instance_variable_get(:@joined_once)
+          next if channel.joining?
+
+          channel.rejoin
         end
       end
 

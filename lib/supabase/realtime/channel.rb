@@ -63,7 +63,21 @@ module Supabase
         @subscribe_callback = block
         @state = Types::ChannelStates::JOINING
 
+        inject_postgres_changes_bindings
         @join_push.instance_variable_set(:@ref, @socket&.next_ref)
+        send_push(@join_push, register_pending: true)
+        self
+      end
+
+      # Re-issue the join push without resetting @joined_once. Used by the
+      # client after a socket reconnect to restore channel subscriptions.
+      def rejoin
+        return unless @joined_once
+
+        @state = Types::ChannelStates::JOINING
+        inject_postgres_changes_bindings
+        @join_push.instance_variable_set(:@ref, @socket&.next_ref)
+        @join_push.instance_variable_set(:@received_status, nil)
         send_push(@join_push, register_pending: true)
         self
       end
@@ -185,6 +199,21 @@ module Supabase
             "private"   => false
           }
         }
+      end
+
+      # Mirrors phoenix.js / supabase-py: every registered on_postgres_changes
+      # listener is serialized into config.postgres_changes on the join payload
+      # so the server filters before sending, instead of shipping every change
+      # for the topic and forcing the client to drop most of them.
+      def inject_postgres_changes_bindings
+        config = (@join_push.payload["config"] ||= {})
+        config["postgres_changes"] = @postgres_changes_callbacks.map do |binding|
+          entry = { "event" => binding[:event] }
+          entry["schema"] = binding[:schema] if binding[:schema]
+          entry["table"]  = binding[:table]  if binding[:table]
+          entry["filter"] = binding[:filter] if binding[:filter]
+          entry
+        end
       end
 
       def send_push(push, register_pending:)
