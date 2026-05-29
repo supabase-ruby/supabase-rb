@@ -4,3 +4,4 @@
 /tmp/
 *.gem
 Gemfile.lock
+.chief/
