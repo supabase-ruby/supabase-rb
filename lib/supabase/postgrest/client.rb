@@ -45,6 +45,54 @@ module Supabase
         @timeout = timeout
       end
 
+      # Set the Authorization header to either Bearer (token) or Basic
+      # (username/password) authentication. Bearer wins if both are supplied.
+      # Mirrors supabase-py's BasePostgrestClient.auth().
+      #
+      # @param token    [String, nil]
+      # @param username [String, nil]
+      # @param password [String]
+      # @return [Client] self, so callers can chain.
+      def auth(token, username: nil, password: "")
+        if token && !token.empty?
+          @headers["Authorization"] = "Bearer #{token}"
+        elsif username
+          credentials = ["#{username}:#{password}"].pack("m0")
+          @headers["Authorization"] = "Basic #{credentials}"
+        else
+          raise ArgumentError, "Neither bearer token nor basic authentication credentials were provided"
+        end
+        self
+      end
+
+      # Release the underlying HTTP connection. After close, subsequent requests
+      # will lazily rebuild the connection on the next call. Mirrors
+      # supabase-py's BasePostgrestClient.aclose() / __exit__ hook — Ruby
+      # callers use it via `client.close` or `Postgrest::Client.new(...) { |c|
+      # ... }` (see ::open below).
+      def close
+        # Faraday connections own a sub-connection per host through their
+        # adapter. We can't force a hard close on most adapters, but dropping
+        # our reference frees the connection for GC and ensures the next call
+        # rebuilds.
+        @session = nil
+        @http_client = nil
+        self
+      end
+
+      # Block form: yields the client, then closes it. Use to scope a client
+      # to a discrete unit of work (matches py's `with SyncPostgrestClient(...)`).
+      def self.open(**kwargs)
+        client = new(**kwargs)
+        return client unless block_given?
+
+        begin
+          yield client
+        ensure
+          client.close
+        end
+      end
+
       # Switch schemas. Returns a new client that points at a different postgres schema.
       # @param name [String]
       # @return [Client]

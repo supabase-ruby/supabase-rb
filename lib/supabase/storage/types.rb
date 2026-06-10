@@ -55,6 +55,10 @@ module Supabase
       # Returned by create_signed_upload_url.
       SignedUploadURL = Struct.new(:signed_url, :token, :path, keyword_init: true) do
         alias_method :signedUrl, :signed_url # rubocop:disable Naming/MethodName
+        # supabase-py exposes this key as `signedURL` (all-caps URL) in its
+        # TypedDict. Keep the alias so dictionary-style indexing from
+        # py-ported code (`result[:signedURL]`) works.
+        alias_method :signedURL, :signed_url # rubocop:disable Naming/MethodName
       end
 
       # --- list_v2 -----------------------------------------------------------

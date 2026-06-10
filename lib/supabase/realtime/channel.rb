@@ -195,6 +195,22 @@ module Supabase
         self
       end
 
+      # Public low-level push for arbitrary Phoenix events. Mirrors
+      # `supabase-py`'s `channel.push(event, payload, timeout)`. Returns the
+      # {Push} instance so callers can attach receive() handlers and observe the
+      # reply / timeout. Raises if called before {#subscribe}.
+      def push_event(event, payload = {}, timeout: nil)
+        unless @joined_once
+          raise Errors::RealtimeError,
+                "tried to push '#{event}' to '#{@topic}' before joining. Call subscribe() first."
+        end
+
+        ref = @socket&.next_ref
+        push = Push.new(self, event, payload, ref: ref, timeout: timeout || Types::DEFAULT_TIMEOUT_SECONDS)
+        send_push(push, register_pending: true)
+        push
+      end
+
       # ----- Inbound dispatch (called by Client) -----
 
       # Route a parsed Message to the appropriate listeners. Returns true if the

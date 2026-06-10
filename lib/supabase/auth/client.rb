@@ -67,6 +67,11 @@ module Supabase
       end
 
       # Initialize the client, optionally from a URL or from storage.
+      # Equivalent to supabase-py's `client.initialize(url=...)` — `initialize`
+      # is the Ruby constructor name, so this rb port uses `#init` instead.
+      # An alias `bootstrap` is provided for callers who prefer a verb that
+      # doesn't read as a constructor.
+      #
       # @param url [String, nil] optional redirect URL to initialize from
       def init(url: nil)
         if url && _is_implicit_grant_flow(url)
@@ -75,6 +80,7 @@ module Supabase
           initialize_from_storage
         end
       end
+      alias bootstrap init
 
       # Recover session from storage and refresh if needed.
       def initialize_from_storage
@@ -904,51 +910,29 @@ module Supabase
         end
 
         if @persist_session && session.expires_at
-          session_data = {
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-            token_type: session.token_type,
-            expires_in: session.expires_in,
-            expires_at: session.expires_at,
-            provider_token: session.provider_token,
-            provider_refresh_token: session.provider_refresh_token
-          }
-          if session.user
-            user = session.user
-            session_data[:user] = {
-              id: user.id, aud: user.aud, role: user.role,
-              email: user.email, phone: user.phone,
-              email_confirmed_at: user.email_confirmed_at&.iso8601,
-              phone_confirmed_at: user.phone_confirmed_at&.iso8601,
-              confirmed_at: user.confirmed_at&.iso8601,
-              last_sign_in_at: user.last_sign_in_at&.iso8601,
-              app_metadata: user.app_metadata, user_metadata: user.user_metadata,
-              identities: user.identities&.map { |i|
-                {
-                  id: i.id, identity_id: i.identity_id, user_id: i.user_id,
-                  identity_data: i.identity_data, provider: i.provider,
-                  last_sign_in_at: i.last_sign_in_at&.iso8601,
-                  created_at: i.created_at&.iso8601, updated_at: i.updated_at&.iso8601
-                }
-              },
-              factors: user.factors&.map { |f|
-                {
-                  id: f.id, friendly_name: f.friendly_name, factor_type: f.factor_type,
-                  status: f.status,
-                  created_at: f.created_at&.iso8601, updated_at: f.updated_at&.iso8601
-                }
-              },
-              created_at: user.created_at&.iso8601, updated_at: user.updated_at&.iso8601,
-              new_email: user.new_email, new_phone: user.new_phone,
-              invited_at: user.invited_at&.iso8601,
-              is_anonymous: user.is_anonymous,
-              confirmation_sent_at: user.confirmation_sent_at&.iso8601,
-              recovery_sent_at: user.recovery_sent_at&.iso8601,
-              email_change_sent_at: user.email_change_sent_at&.iso8601,
-              action_link: user.action_link
-            }
+          @storage.set_item(@storage_key, JSON.generate(_serialize_session(session)))
+        end
+      end
+
+      # Recursively dump a Session (and nested User / Identity / Factor structs)
+      # to a Hash that JSON.generate accepts. Mirrors py's
+      # `session.model_dump_json()` — every Struct member is preserved (not
+      # just a hand-picked allow-list), so custom upstream fields round-trip
+      # through storage without being silently dropped.
+      def _serialize_session(value)
+        case value
+        when Struct
+          value.to_h.each_with_object({}) do |(key, member_value), acc|
+            acc[key] = _serialize_session(member_value)
           end
-          @storage.set_item(@storage_key, JSON.generate(session_data))
+        when Hash
+          value.each_with_object({}) { |(k, v), acc| acc[k] = _serialize_session(v) }
+        when Array
+          value.map { |item| _serialize_session(item) }
+        when Time, Date, DateTime
+          value.iso8601
+        else
+          value
         end
       end
 

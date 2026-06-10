@@ -30,6 +30,37 @@ module Supabase
   class Client
     attr_reader :supabase_url, :supabase_key, :options, :headers
 
+    # Mirrors supabase-py's `Client.create(...)`: builds a client, then — if
+    # no explicit Authorization was supplied via options — tries to pull a
+    # persisted session via the auth client and applies its access_token as
+    # the bearer token. Useful when bootstrapping from a session file the
+    # user previously signed into. Any error from get_session is swallowed
+    # so the client always returns successfully.
+    def self.create(supabase_url:, supabase_key:, options: nil, async: false)
+      configured_auth = nil
+      if options.is_a?(Supabase::ClientOptions)
+        configured_auth = options.headers["Authorization"] || options.headers[:Authorization]
+      elsif options.is_a?(Hash)
+        global_headers = options[:global]&.dig(:headers) || options.dig("global", "headers") || {}
+        configured_auth = global_headers["Authorization"] || global_headers[:Authorization]
+      end
+
+      client = new(supabase_url: supabase_url, supabase_key: supabase_key,
+                   options: options || {}, async: async)
+
+      if configured_auth.nil?
+        begin
+          session = client.auth.get_session
+          client.set_auth(session.access_token) if session&.access_token
+        rescue StandardError
+          # No persisted session, or auth storage unavailable — fall back to
+          # the apikey-only bearer that initialize set up.
+        end
+      end
+
+      client
+    end
+
     def initialize(supabase_url:, supabase_key:, options: {}, async: false)
       # Use Supabase::SupabaseException once defined; fall back to ArgumentError
       # during early require cycles. Matches supabase-py's contract.
@@ -63,7 +94,19 @@ module Supabase
     # --- Sub-clients ---------------------------------------------------------
 
     def auth
-      @auth ||= auth_class.new(url: rest_url_for("auth/v1"), headers: @headers, **sub_options(:auth))
+      return @auth if @auth
+
+      @auth = auth_class.new(url: rest_url_for("auth/v1"), headers: @headers, **sub_options(:auth))
+      # Mirror supabase-py's `self.auth.on_auth_state_change(self._listen_to_auth_events)`:
+      # when the auth client emits SIGNED_IN / TOKEN_REFRESHED / SIGNED_OUT,
+      # propagate the new token to every other sub-client.
+      @auth.on_auth_state_change do |event, session|
+        next unless %w[SIGNED_IN TOKEN_REFRESHED SIGNED_OUT].include?(event)
+
+        token = session&.access_token || @supabase_key
+        propagate_auth(token)
+      end
+      @auth
     end
 
     def storage
@@ -125,6 +168,17 @@ module Supabase
     end
 
     private
+
+    # Refresh the Authorization header (used by every sub-client other than
+    # auth itself, which manages its own headers) and reset the memoized
+    # sub-clients so they pick up the new token on next access.
+    def propagate_auth(token)
+      @headers["Authorization"] = "Bearer #{token}"
+      @storage   = nil
+      @functions = nil
+      @postgrest = nil
+      @realtime&.set_auth(token)
+    end
 
     def auth_class
       @async ? require_async_class("auth", "Async::Client") : Auth::Client

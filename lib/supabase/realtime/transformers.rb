@@ -21,6 +21,16 @@ module Supabase
         url = url.sub(%r{(/socket/websocket|/socket|/websocket)/?\z}i, "")
         url.sub(%r{/+\z}, "")
       end
+
+      # Mirrors supabase-py's utils.is_ws_url: accepts ws/wss and http/https
+      # (which Client#normalize_url upgrades to ws/wss). Any other scheme — or
+      # an unparseable string — returns false.
+      def is_ws_url(url)
+        scheme = URI.parse(url.to_s).scheme&.downcase
+        %w[ws wss http https].include?(scheme)
+      rescue URI::InvalidURIError
+        false
+      end
     end
   end
 end

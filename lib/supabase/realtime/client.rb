@@ -4,7 +4,9 @@ require "json"
 require "uri"
 
 require_relative "channel"
+require_relative "errors"
 require_relative "message"
+require_relative "transformers"
 require_relative "types"
 require_relative "version"
 
@@ -43,6 +45,11 @@ module Supabase
       def initialize(url:, params: {}, socket: nil, timeout: Types::DEFAULT_TIMEOUT_SECONDS,
                      heartbeat_interval: Types::DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
                      auto_reconnect: true, max_retries: 5, initial_backoff: 1.0)
+        unless Transformers.is_ws_url(url)
+          raise ArgumentError,
+                "Invalid Realtime URL #{url.inspect}: expected ws://, wss://, http://, or https://"
+        end
+
         @url     = normalize_url(url, params)
         @params  = params
         @access_token = params[:access_token] || params["access_token"]
