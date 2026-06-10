@@ -247,10 +247,77 @@ RSpec.describe Supabase::Realtime::Channel do
   describe "#unsubscribe" do
     before { channel.subscribe; ack_join; socket.reset_sent_frames }
 
-    it "sends a phx_leave frame and marks the channel CLOSED" do
+    it "sends a phx_leave frame and stays in LEAVING until the server acks" do
       channel.unsubscribe
       expect(socket.sent_events).to include("phx_leave")
+      expect(channel).to be_leaving
+    end
+
+    it "transitions to CLOSED only after the leave ack arrives" do
+      channel.unsubscribe
+      leave_ref = socket.last_sent_frame["ref"]
+      socket.inject(
+        "event"   => "phx_reply",
+        "topic"   => channel.topic,
+        "payload" => { "status" => "ok", "response" => {} },
+        "ref"     => leave_ref
+      )
       expect(channel).to be_closed
+    end
+
+    it "fires on_close listeners after the leave ack" do
+      fired = false
+      channel.on_close { fired = true }
+      channel.unsubscribe
+      leave_ref = socket.last_sent_frame["ref"]
+      socket.inject(
+        "event"   => "phx_reply",
+        "topic"   => channel.topic,
+        "payload" => { "status" => "ok", "response" => {} },
+        "ref"     => leave_ref
+      )
+      expect(fired).to be true
+    end
+  end
+
+  describe "postgres_changes server/client binding mismatch" do
+    it "unsubscribes and reports CHANNEL_ERROR when server bindings don't match" do
+      state = err = nil
+      channel.on_postgres_changes("INSERT", schema: "public", table: "users") { }
+      channel.subscribe { |s, e| state = s; err = e }
+
+      # Server replies with a different table than the client requested.
+      ack_join(
+        status: "ok",
+        response: {
+          "postgres_changes" => [
+            { "id" => 1, "event" => "INSERT", "schema" => "public", "table" => "orders", "filter" => nil }
+          ]
+        }
+      )
+
+      expect(state).to eq("CHANNEL_ERROR")
+      expect(err).to be_a(Supabase::Realtime::Errors::RealtimeError)
+      expect(channel).to be_leaving
+      expect(socket.sent_events).to include("phx_leave")
+    end
+
+    it "preserves SUBSCRIBED and records server-assigned binding ids when they match" do
+      state = nil
+      channel.on_postgres_changes("INSERT", schema: "public", table: "users") { }
+      channel.subscribe { |s, _| state = s }
+
+      ack_join(
+        status: "ok",
+        response: {
+          "postgres_changes" => [
+            { "id" => 42, "event" => "INSERT", "schema" => "public", "table" => "users", "filter" => nil }
+          ]
+        }
+      )
+
+      expect(state).to eq("SUBSCRIBED")
+      expect(channel).to be_joined
     end
   end
 end

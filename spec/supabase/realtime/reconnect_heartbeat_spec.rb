@@ -167,6 +167,7 @@ RSpec.describe "Realtime production-readiness fixes" do
     end
 
     it "re-issues phx_join for previously-subscribed channels after reconnect" do
+      client.connect
       channel = client.channel("realtime:public:posts")
       channel.subscribe
       # Simulate server ack so channel.@joined_once stays true and state is JOINED.

@@ -39,7 +39,7 @@ module Supabase
         @subscribe_callback = nil
 
         @join_push
-          .receive(Types::AckStatus::OK)      { |_| on_join_ok }
+          .receive(Types::AckStatus::OK)      { |p| on_join_ok(p) }
           .receive(Types::AckStatus::ERROR)   { |p| on_join_error(p) }
           .receive(Types::AckStatus::TIMEOUT) { |_| on_join_timeout }
       end
@@ -82,13 +82,23 @@ module Supabase
         self
       end
 
-      # Tear down the subscription with a phx_leave push.
+      # Tear down the subscription with a phx_leave push. State stays in LEAVING
+      # until the server acks (or errors / times out) — mirrors phoenix.js and
+      # supabase-py so a fast unsubscribe→resubscribe cycle doesn't race with the
+      # server's reply for the previous join.
       def unsubscribe
+        return self if closed?
+
         @state = Types::ChannelStates::LEAVING
         ref = @socket&.next_ref
         leave_push = Push.new(self, Types::ChannelEvents::LEAVE, {}, ref: ref)
-        send_push(leave_push, register_pending: false)
-        @state = Types::ChannelStates::CLOSED
+
+        leave_push
+          .receive(Types::AckStatus::OK)      { |_| on_leave_ack }
+          .receive(Types::AckStatus::ERROR)   { |_| on_leave_ack }
+          .receive(Types::AckStatus::TIMEOUT) { |_| on_leave_ack }
+
+        send_push(leave_push, register_pending: true)
         self
       end
 
@@ -226,11 +236,21 @@ module Supabase
         )
 
         if can_send?
-          @pending_pushes[push.ref] = push if register_pending && push.ref
+          if register_pending && push.ref
+            @pending_pushes[push.ref] = push
+            # Arm the timeout only once the push is actually on the wire — if it
+            # gets buffered (channel not yet joined) we leave it untimed until
+            # the buffer is flushed.
+            push.start_timeout
+          end
           @socket&.push(message)
         else
           @push_buffer << [push, register_pending]
         end
+      end
+
+      def remove_pending(ref)
+        @pending_pushes.delete(ref)
       end
 
       def can_send?
@@ -277,7 +297,46 @@ module Supabase
         end
       end
 
-      def on_join_ok
+      def on_join_ok(payload = nil)
+        # phoenix replies for postgres_changes echo back the bindings the server
+        # actually registered. Compare them index-wise with our local callbacks:
+        # if any client binding doesn't match the server's, the subscription is
+        # silently going to miss events — abort the subscription and surface a
+        # CHANNEL_ERROR so the caller can react instead of waiting forever for
+        # rows that will never arrive.
+        server_postgres_changes = payload.is_a?(Hash) ? payload["postgres_changes"] : nil
+
+        if server_postgres_changes && !@postgres_changes_callbacks.empty?
+          new_bindings = []
+          mismatch = false
+
+          @postgres_changes_callbacks.each_with_index do |binding, i|
+            server_binding = server_postgres_changes[i]
+
+            if server_binding &&
+               server_binding["event"] == binding[:event] &&
+               server_binding["schema"] == binding[:schema] &&
+               server_binding["table"] == binding[:table] &&
+               server_binding["filter"] == binding[:filter]
+              new_bindings << binding.merge(id: server_binding["id"])
+            else
+              mismatch = true
+              break
+            end
+          end
+
+          if mismatch
+            unsubscribe
+            err = Errors::RealtimeError.new(
+              "mismatch between server and client bindings for postgres changes"
+            )
+            @subscribe_callback&.call(Types::SubscribeStates::CHANNEL_ERROR, err)
+            return
+          end
+
+          @postgres_changes_callbacks = new_bindings
+        end
+
         @state = Types::ChannelStates::JOINED
         flush_push_buffer
         @subscribe_callback&.call(Types::SubscribeStates::SUBSCRIBED, nil)
@@ -297,6 +356,11 @@ module Supabase
         buffered = @push_buffer
         @push_buffer = []
         buffered.each { |push, register_pending| send_push(push, register_pending: register_pending) }
+      end
+
+      def on_leave_ack
+        @state = Types::ChannelStates::CLOSED
+        @close_callbacks.each { |cb| cb.call({}) }
       end
     end
   end

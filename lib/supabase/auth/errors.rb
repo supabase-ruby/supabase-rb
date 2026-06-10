@@ -112,6 +112,16 @@ module Supabase
         end
       end
 
+      # Raised when an access token references a user that no longer exists.
+      class UserDoesntExist < StandardError
+        attr_reader :access_token
+
+        def initialize(access_token)
+          super("User from access_token does not exist")
+          @access_token = access_token
+        end
+      end
+
       # Alias for AuthSessionMissing (matches Python's AuthSessionMissingError)
       AuthSessionMissingError = AuthSessionMissing
       # Alias for AuthWeakPassword (matches Python's AuthWeakPasswordError)

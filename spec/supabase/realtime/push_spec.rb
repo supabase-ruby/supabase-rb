@@ -38,4 +38,33 @@ RSpec.describe Supabase::Realtime::Push do
   it "is chainable so receive(...).receive(...) reads naturally" do
     expect(push.receive("ok") { }).to be(push)
   end
+
+  describe "#start_timeout" do
+    it "fires the timeout handler after the configured delay" do
+      fired = false
+      push.receive("timeout") { fired = true }
+      push.start_timeout(0.05)
+      sleep 0.15
+      expect(fired).to be true
+    end
+
+    it "does not double-fire when an ack arrives after the timeout" do
+      counter = 0
+      push.receive("timeout") { counter += 1 }
+      push.receive("ok")      { counter += 1 }
+      push.start_timeout(0.05)
+      sleep 0.15
+      push.resolve(status: "ok", payload: {})
+      expect(counter).to eq(1)
+    end
+
+    it "is cancelled by a successful resolve" do
+      counter = 0
+      push.receive("timeout") { counter += 1 }
+      push.start_timeout(0.05)
+      push.resolve(status: "ok", payload: {})
+      sleep 0.15
+      expect(counter).to eq(0)
+    end
+  end
 end

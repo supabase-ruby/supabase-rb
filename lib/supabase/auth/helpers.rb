@@ -105,7 +105,7 @@ module Supabase
           response = exception.response
           status = response[:status]
 
-          if [502, 503, 504].include?(status)
+          if [502, 503, 504, 520, 521, 522, 523, 524, 530].include?(status)
             return Errors::AuthRetryableError.new(exception.message, status: status)
           end
 

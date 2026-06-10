@@ -335,6 +335,8 @@ module Supabase
           session = response.session
         else
           user_response = get_user(access_token)
+          raise Errors::UserDoesntExist, access_token if user_response.nil?
+
           session = Types::Session.new(
             access_token: access_token,
             refresh_token: refresh_token,
@@ -1021,6 +1023,8 @@ module Supabase
         expires_at = time_now + expires_in
 
         user_response = get_user(access_token)
+        raise Errors::UserDoesntExist, access_token if user_response.nil?
+
         session = Types::Session.new(
           provider_token: provider_token,
           provider_refresh_token: provider_refresh_token,

@@ -3,11 +3,11 @@
 module Supabase
   module Realtime
     # Tracks presence state for one channel and implements the Phoenix Presence
-    # sync algorithm: presence_state replaces the local snapshot, presence_diff
-    # applies joins/leaves on top of it.
-    #
-    # The algorithm mirrors phoenix.js's Presence.syncState / Presence.syncDiff so
-    # callers porting from JS/Python see identical behavior.
+    # sync algorithm. Mirrors supabase-py's AsyncRealtimePresence: raw
+    # `{ key => { "metas" => [{ "phx_ref" => ..., ... }] } }` wire payloads are
+    # transformed to a flat `{ key => [{ "presence_ref" => ..., ... }, ...] }`
+    # shape before being stored or emitted, so listener callbacks receive
+    # `(key, current_presences, new_presences)` with `presence_ref` keys.
     class Presence
       attr_reader :state
 
@@ -18,77 +18,47 @@ module Supabase
         @on_leave_callbacks = []
       end
 
-      # The first presence_state message after joining sends the full state. Any
-      # local metas we already have for a key but the server doesn't are emitted
-      # as leaves; anything new is emitted as a join.
-      def sync_state(new_state)
-        joins  = {}
-        leaves = {}
+      # First snapshot after joining: diff against the (possibly empty) local
+      # state and apply the joins/leaves through the same code path as
+      # `sync_diff`.
+      def sync_state(raw_state)
+        new_state = self.class.transform_state(raw_state)
+        joins = {}
+        leaves = @state.reject { |k, _| new_state.key?(k) }
 
-        @state.each do |key, presence|
-          leaves[key] = presence unless new_state.key?(key)
-        end
+        new_state.each do |key, presences|
+          current = @state[key] || []
 
-        new_state.each do |key, new_presence|
-          current = @state[key]
-          if current
-            joined = []
-            left   = []
-            current_refs = metas(current).map { |m| m["phx_ref"] }
-            new_refs     = metas(new_presence).map { |m| m["phx_ref"] }
-            joined = metas(new_presence).reject { |m| current_refs.include?(m["phx_ref"]) }
-            left   = metas(current).reject     { |m| new_refs.include?(m["phx_ref"]) }
-            joins[key]  = { "metas" => joined } unless joined.empty?
-            leaves[key] = { "metas" => left }   unless left.empty?
+          if current.any?
+            current_refs = current.map { |p| p["presence_ref"] }
+            new_refs = presences.map { |p| p["presence_ref"] }
+            joined_presences = presences.reject { |p| current_refs.include?(p["presence_ref"]) }
+            left_presences = current.reject { |p| new_refs.include?(p["presence_ref"]) }
+            joins[key] = joined_presences if joined_presences.any?
+            leaves[key] = left_presences if left_presences.any?
           else
-            joins[key] = new_presence
+            joins[key] = presences
           end
         end
 
-        @state = deep_copy(new_state)
-        emit_joins(joins)
-        emit_leaves(leaves)
+        sync_diff_internal(joins, leaves)
         @on_sync_callbacks.each(&:call)
         @state
       end
 
-      # Subsequent presence_diff messages carry only joins/leaves to apply.
-      def sync_diff(diff)
-        joins  = diff["joins"]  || {}
-        leaves = diff["leaves"] || {}
-
-        joins.each do |key, presence|
-          if @state[key]
-            existing_refs = metas(@state[key]).map { |m| m["phx_ref"] }
-            new_metas     = metas(presence).reject { |m| existing_refs.include?(m["phx_ref"]) }
-            @state[key]   = { "metas" => metas(@state[key]) + new_metas }
-          else
-            @state[key] = presence
-          end
-        end
-
-        leaves.each do |key, presence|
-          next unless @state[key]
-
-          leaving_refs   = metas(presence).map { |m| m["phx_ref"] }
-          remaining      = metas(@state[key]).reject { |m| leaving_refs.include?(m["phx_ref"]) }
-          if remaining.empty?
-            @state.delete(key)
-          else
-            @state[key] = { "metas" => remaining }
-          end
-        end
-
-        emit_joins(joins)
-        emit_leaves(leaves)
+      # Subsequent presence_diff messages: apply joins/leaves to the local state.
+      # Raw input is transformed before being applied.
+      def sync_diff(raw_diff)
+        joins = self.class.transform_state(raw_diff["joins"] || {})
+        leaves = self.class.transform_state(raw_diff["leaves"] || {})
+        sync_diff_internal(joins, leaves)
         @on_sync_callbacks.each(&:call)
         @state
       end
 
-      # List every meta currently tracked, flat. Useful when callers don't care
-      # about the per-key grouping.
+      # Flat list of every presence currently tracked.
       def list
-        @state.values.flat_map { |presence| metas(presence) }
+        @state.values.flatten
       end
 
       def on_sync(&block)
@@ -110,26 +80,60 @@ module Supabase
         [@on_sync_callbacks, @on_join_callbacks, @on_leave_callbacks].any? { |list| !list.empty? }
       end
 
+      # Convert raw Phoenix wire format `{ key => { "metas" => [{phx_ref, ...}] } }`
+      # to flat `{ key => [{presence_ref, ...}, ...] }`. Idempotent on already
+      # transformed input.
+      def self.transform_state(state)
+        new_state = {}
+        (state || {}).each do |key, presences|
+          new_state[key] = if presences.is_a?(Hash) && presences.key?("metas")
+                             presences["metas"].map { |meta| transform_meta(meta) }
+                           else
+                             Array(presences).map { |meta| transform_meta(meta) }
+                           end
+        end
+        new_state
+      end
+
+      def self.transform_meta(meta)
+        meta = meta.dup
+        meta.delete("phx_ref_prev")
+        if meta.key?("phx_ref")
+          ref = meta.delete("phx_ref")
+          { "presence_ref" => ref }.merge(meta)
+        else
+          meta
+        end
+      end
+
       private
 
-      def metas(presence)
-        Array(presence && presence["metas"])
-      end
+      def sync_diff_internal(joins, leaves)
+        joins.each do |key, new_presences|
+          current_presences = @state[key] || []
+          @state[key] = new_presences
 
-      def emit_joins(joins)
-        joins.each do |key, presence|
-          @on_join_callbacks.each { |cb| cb.call(key, presence) }
+          if current_presences.any?
+            joined_refs = new_presences.map { |p| p["presence_ref"] }
+            keep_from_current = current_presences.reject { |p| joined_refs.include?(p["presence_ref"]) }
+            @state[key] = keep_from_current + @state[key]
+          end
+
+          @on_join_callbacks.each { |cb| cb.call(key, current_presences, new_presences) }
         end
-      end
 
-      def emit_leaves(leaves)
-        leaves.each do |key, presence|
-          @on_leave_callbacks.each { |cb| cb.call(key, presence) }
+        leaves.each do |key, left_presences|
+          current_presences = @state[key] || []
+          next if current_presences.empty?
+
+          remove_refs = left_presences.map { |p| p["presence_ref"] }
+          remaining = current_presences.reject { |p| remove_refs.include?(p["presence_ref"]) }
+          @state[key] = remaining
+
+          @on_leave_callbacks.each { |cb| cb.call(key, remaining, left_presences) }
+
+          @state.delete(key) if remaining.empty?
         end
-      end
-
-      def deep_copy(obj)
-        Marshal.load(Marshal.dump(obj))
       end
     end
   end

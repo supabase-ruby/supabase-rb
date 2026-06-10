@@ -168,4 +168,18 @@ RSpec.describe Supabase::Realtime::Client do
       expect { socket.inject("event" => "phx_close", "payload" => {}) }.not_to raise_error
     end
   end
+
+  describe "send_buffer (offline pushes)" do
+    it "buffers frames pushed before the socket connects and flushes them on open" do
+      # Subscribe before connect — Channel#send_push reaches Client#push while
+      # the socket is still closed, so the frame must be queued, not dropped.
+      ch = client.channel("topic:buffer")
+      ch.subscribe
+      expect(socket.sent_frames).to be_empty
+
+      client.connect
+      events = socket.sent_frames.map { |f| JSON.parse(f)["event"] }
+      expect(events).to include("phx_join")
+    end
+  end
 end

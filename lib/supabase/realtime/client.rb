@@ -58,6 +58,8 @@ module Supabase
         @heartbeat_thread   = nil
         @reconnect_thread   = nil
         @intentionally_closed = false
+        @send_buffer        = [] # frames queued while no socket / not connected
+        @send_buffer_mutex  = Mutex.new
 
         attach_socket if @socket
       end
@@ -155,17 +157,23 @@ module Supabase
         @ref.to_s
       end
 
-      # Used by Channel#send_push.
+      # Used by Channel#send_push. If the socket isn't connected yet, the frame
+      # is buffered and flushed automatically when the socket opens — matches
+      # supabase-py's send_buffer so offline pushes aren't silently dropped.
       def push(message)
-        return unless @socket
-
-        @socket.send(JSON.generate(
+        frame = JSON.generate(
           "event"    => message.event,
           "topic"    => message.topic,
           "payload"  => message.payload,
           "ref"      => message.ref,
           "join_ref" => message.join_ref
-        ))
+        )
+
+        if connected?
+          @socket.send(frame)
+        else
+          @send_buffer_mutex.synchronize { @send_buffer << frame }
+        end
       end
 
       private
@@ -177,8 +185,26 @@ module Supabase
       end
 
       def handle_socket_open
+        flush_send_buffer
         start_heartbeat
         rejoin_channels
+      end
+
+      def flush_send_buffer
+        buffered = @send_buffer_mutex.synchronize do
+          frames = @send_buffer
+          @send_buffer = []
+          frames
+        end
+        buffered.each do |frame|
+          begin
+            @socket.send(frame)
+          rescue StandardError
+            # Drop on send-error — re-queueing would risk a tight loop if the
+            # socket closes immediately. The push's own timeout will surface
+            # the failure to the caller.
+          end
+        end
       end
 
       def handle_socket_close
