@@ -260,7 +260,10 @@ module Supabase
       # so the server filters before sending, instead of shipping every change
       # for the topic and forcing the client to drop most of them. Also flips
       # config.presence.enabled when any presence callback is attached, so the
-      # server starts emitting presence_state/diff frames.
+      # server starts emitting presence_state/diff frames. Finally, pulls the
+      # current socket access_token onto config.access_token so RLS sees the
+      # caller's JWT — private channels reject the join otherwise. The token
+      # source is identical to what set_auth rotates (single source of truth).
       def inject_postgres_changes_bindings
         config = (@join_push.payload["config"] ||= {})
         config["postgres_changes"] = @postgres_changes_callbacks.map do |binding|
@@ -273,6 +276,8 @@ module Supabase
 
         presence_cfg = (config["presence"] ||= {})
         presence_cfg["enabled"] = true if @presence.any_callbacks?
+
+        config["access_token"] = @socket&.access_token
       end
 
       # If a presence callback is added after the channel is already joined,
