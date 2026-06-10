@@ -140,27 +140,33 @@ module Supabase
 
       # Update the access token, send it to every joined channel so RLS reflects
       # the new auth context, and remember it for future joins.
+      #
+      # Safe to call before `connect`: the token is always written to
+      # `@access_token` / `@params` so the next subscribe picks it up via
+      # `Channel#inject_postgres_changes_bindings`. The ACCESS_TOKEN frame fan-out
+      # only runs once the socket is actually connected.
       def set_auth(token)
         @access_token = token
         @params["access_token"] = token if @params.is_a?(Hash)
-        return unless @socket && @socket.connected?
 
-        @channels.each do |channel|
-          next unless channel.joined?
+        if connected?
+          @channels.each do |channel|
+            next unless channel.joined?
 
-          msg = Message.new(
-            event:   Types::ChannelEvents::ACCESS_TOKEN,
-            topic:   channel.topic,
-            payload: { "access_token" => token },
-            ref:     next_ref
-          )
-          @socket.send(JSON.generate(
-            "event"    => msg.event,
-            "topic"    => msg.topic,
-            "payload"  => msg.payload,
-            "ref"      => msg.ref,
-            "join_ref" => nil
-          ))
+            msg = Message.new(
+              event:   Types::ChannelEvents::ACCESS_TOKEN,
+              topic:   channel.topic,
+              payload: { "access_token" => token },
+              ref:     next_ref
+            )
+            @socket.send(JSON.generate(
+              "event"    => msg.event,
+              "topic"    => msg.topic,
+              "payload"  => msg.payload,
+              "ref"      => msg.ref,
+              "join_ref" => nil
+            ))
+          end
         end
       end
 
