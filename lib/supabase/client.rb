@@ -142,6 +142,22 @@ module Supabase
       postgrest.rpc(func, params, **opts)
     end
 
+    # Realtime shortcuts on the umbrella — mirror supabase-py so callers can do
+    # `client.channel("public:users")` instead of `client.realtime.channel(...)`.
+    # The `realtime:` topic prefix is still optional (handled inside the
+    # Realtime client).
+    def channel(topic, params: nil)
+      realtime.channel(topic, params: params)
+    end
+
+    def get_channels
+      realtime.get_channels
+    end
+
+    def remove_channel(channel)
+      realtime.remove_channel(channel)
+    end
+
     # Return a Postgrest client scoped to `name` without mutating self. Matches
     # supabase-py: `client.schema("foo").from_("x")` queries the foo schema but
     # leaves `client.from(...)` (and other call sites) on the default schema.

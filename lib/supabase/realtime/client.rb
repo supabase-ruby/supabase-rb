@@ -131,6 +131,7 @@ module Supabase
       def remove_channel(channel)
         channel.unsubscribe
         @channels.delete(channel)
+        @socket&.close if @channels.empty?
       end
 
       def remove_all_channels
