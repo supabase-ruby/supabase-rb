@@ -39,6 +39,31 @@ RSpec.describe Supabase::Postgrest::Client do
     end
   end
 
+  describe "DEFAULT_POSTGREST_TIMEOUT (US-032)" do
+    it "exposes the 120s default as a constant" do
+      expect(Supabase::Postgrest::DEFAULT_POSTGREST_TIMEOUT).to eq(120)
+    end
+
+    it "applies the default timeout to the Faraday session when timeout: is omitted" do
+      client = described_class.new(base_url: "https://example.com/rest/v1")
+      session = client.send(:session)
+      expect(session.options.timeout).to eq(120)
+      expect(session.options.open_timeout).to eq(120)
+    end
+
+    it "applies the default timeout when timeout: nil is passed explicitly" do
+      client = described_class.new(base_url: "https://example.com/rest/v1", timeout: nil)
+      session = client.send(:session)
+      expect(session.options.timeout).to eq(120)
+    end
+
+    it "honors an explicit numeric timeout over the default" do
+      client = described_class.new(base_url: "https://example.com/rest/v1", timeout: 7)
+      session = client.send(:session)
+      expect(session.options.timeout).to eq(7)
+    end
+  end
+
   describe "#schema" do
     it "returns a new client pointed at a different postgres schema" do
       original = described_class.new(base_url: "https://example.com/rest/v1", schema: "public")

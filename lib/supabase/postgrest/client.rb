@@ -12,6 +12,10 @@ module Supabase
       "Content-Type" => "application/json"
     }.freeze
 
+    # Per-request HTTP timeout (seconds) applied when callers don't supply
+    # one. Mirrors supabase-py's `DEFAULT_POSTGREST_CLIENT_TIMEOUT = 120`.
+    DEFAULT_POSTGREST_TIMEOUT = 120
+
     # Sync PostgREST client. Constructed once per project; reused across requests.
     #
     # ```ruby
@@ -42,7 +46,7 @@ module Supabase
         @http_client = http_client
         @verify = verify
         @proxy = proxy
-        @timeout = timeout
+        @timeout = timeout.nil? ? DEFAULT_POSTGREST_TIMEOUT : timeout
       end
 
       # Set the Authorization header to either Bearer (token) or Basic
