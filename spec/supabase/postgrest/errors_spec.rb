@@ -68,6 +68,21 @@ RSpec.describe Supabase::Postgrest::Errors do
       expect(described_class.new(nil).message).to be_a(String)
       expect(described_class.new("code" => "PGRST116").message).to be_a(String)
     end
+
+    it "accepts non-Hash payloads without raising and preserves the raw value" do
+      err = described_class.new([1, 2, 3])
+
+      expect(err.raw).to eq([1, 2, 3])
+      expect(err.message).to include("[1, 2, 3]")
+      expect(err.message).to eq("PostgREST returned non-hash error: [1, 2, 3]")
+    end
+
+    it "accepts a String payload without raising" do
+      err = described_class.new("boom")
+
+      expect(err.raw).to eq("boom")
+      expect(err.message).to include('"boom"')
+    end
   end
 
   describe ".generate_default_error_message" do

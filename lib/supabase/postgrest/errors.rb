@@ -11,11 +11,18 @@ module Supabase
 
         # @param error [Hash] parsed JSON body from a PostgREST error response
         def initialize(error = {})
-          @raw = error || {}
-          @message = @raw["message"] || @raw[:message]
-          @code = @raw["code"] || @raw[:code]
-          @hint = @raw["hint"] || @raw[:hint]
-          @details = @raw["details"] || @raw[:details]
+          if error.is_a?(Hash)
+            @raw = error
+            @message = @raw["message"] || @raw[:message]
+            @code = @raw["code"] || @raw[:code]
+            @hint = @raw["hint"] || @raw[:hint]
+            @details = @raw["details"] || @raw[:details]
+          elsif error.nil?
+            @raw = {}
+          else
+            @raw = error
+            @message = "PostgREST returned non-hash error: #{error.inspect}"
+          end
           super(to_s)
         end
 
