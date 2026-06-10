@@ -81,6 +81,7 @@ module Supabase
       def invoke(function_name, body: nil, headers: {}, method: "POST", region: nil, response_type: :text,
                  query: nil, return_response: false)
         validate_function_name!(function_name)
+        validate_region!(region)
 
         http_method = method.to_s.upcase
         unless VALID_METHODS.include?(http_method)
@@ -148,6 +149,20 @@ module Supabase
         return if name.is_a?(String) && !name.strip.empty?
 
         raise ArgumentError, "function_name must be a non-empty String"
+      end
+
+      # Reject regions that aren't in {Types::FunctionRegion::ALL}. Nil is fine
+      # (means "let the server pick"); FunctionRegion::ANY is explicitly allowed
+      # — the AC's `|| region == FunctionRegion::ANY` clause is redundant with
+      # the `ALL` check (ANY is already in ALL) but kept here in spirit so
+      # callers passing the sentinel string `"any"` also pass.
+      def validate_region!(region)
+        return if region.nil?
+        return if Types::FunctionRegion::ALL.include?(region)
+
+        raise ArgumentError,
+              "region must be one of Supabase::Functions::Types::FunctionRegion::ALL " \
+              "(got #{region.inspect})"
       end
 
       def raise_for_relay!(response)
