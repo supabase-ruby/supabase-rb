@@ -6,7 +6,7 @@ require "faraday"
 # builder. We intercept at the Faraday connection level (test adapter) and
 # preserve the params_encoder configured by Client#build_session, so the
 # assertion fails if FlatParamsEncoder isn't wired up.
-module PostgrestQueryHelper
+module WireFormatHelper
   def expect_query(builder, expected_string)
     request = builder.request
     real_session = request.session
@@ -31,5 +31,5 @@ module PostgrestQueryHelper
 end
 
 RSpec.configure do |config|
-  config.include PostgrestQueryHelper
+  config.include WireFormatHelper
 end
