@@ -206,6 +206,48 @@ RSpec.describe Supabase::Realtime::Channel do
     end
   end
 
+  describe "buffering broadcast/track/untrack before JOINED" do
+    it "buffers a send_broadcast call made before subscribe() and flushes it after JOINED" do
+      channel.send_broadcast("typing", { "user" => "u1" })
+      expect(socket.sent_events).to be_empty
+
+      channel.subscribe
+      expect(socket.sent_events).to eq(["phx_join"])
+
+      ack_join
+      sent = socket.sent_events
+      expect(sent.last).to eq("broadcast")
+      flushed = JSON.parse(socket.sent_frames.last)
+      expect(flushed["payload"])
+        .to eq("type" => "broadcast", "event" => "typing", "payload" => { "user" => "u1" })
+    end
+
+    it "buffers track/untrack calls made before subscribe() and flushes them in order" do
+      channel.track({ "status" => "online" })
+      channel.untrack
+      expect(socket.sent_events).to be_empty
+
+      channel.subscribe
+      ack_join
+
+      presence_frames = socket.sent_frames.map { |f| JSON.parse(f) }
+                              .select { |f| f["event"] == "presence" }
+      expect(presence_frames.map { |f| f["payload"]["event"] }).to eq(%w[track untrack])
+    end
+
+    it "buffers a send_broadcast issued while JOINING (before the phx_reply ack)" do
+      channel.subscribe
+      expect(channel).to be_joining
+
+      channel.send_broadcast("typing", { "user" => "u1" })
+      # Only the phx_join is on the wire; the broadcast is buffered until JOINED.
+      expect(socket.sent_events).to eq(["phx_join"])
+
+      ack_join
+      expect(socket.sent_events).to include("broadcast")
+    end
+  end
+
   describe "phx_close / phx_error inbound" do
     before { channel.subscribe; ack_join }
 

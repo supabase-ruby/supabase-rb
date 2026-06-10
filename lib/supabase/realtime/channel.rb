@@ -312,7 +312,7 @@ module Supabase
           join_ref: @join_push.ref
         )
 
-        if can_send?
+        if can_send?(push)
           if register_pending && push.ref
             @pending_pushes[push.ref] = push
             # Arm the timeout only once the push is actually on the wire — if it
@@ -330,14 +330,15 @@ module Supabase
         @pending_pushes.delete(ref)
       end
 
-      def can_send?
-        # The join push flushes while joining; the leave push flushes while leaving.
-        # Everything else (broadcasts, presence, custom pushes) only sends once joined.
-        [
-          Types::ChannelStates::JOINED,
-          Types::ChannelStates::JOINING,
-          Types::ChannelStates::LEAVING
-        ].include?(@state)
+      # The join push flushes while joining; the leave push flushes while leaving.
+      # Everything else (broadcasts, presence, custom pushes) only sends once
+      # joined — calls made before subscribe() / between subscribe() and the
+      # phx_reply ack are buffered and replayed by flush_push_buffer on JOINED.
+      def can_send?(push)
+        return joining? || joined? if push.equal?(@join_push)
+        return leaving? if push.event == Types::ChannelEvents::LEAVE
+
+        joined?
       end
 
       def dispatch_reply(message)
