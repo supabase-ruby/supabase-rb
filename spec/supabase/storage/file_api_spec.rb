@@ -130,6 +130,26 @@ RSpec.describe Supabase::Storage::FileApi do
 
       expect(bucket.download("x.png")).to eq(png_bytes)
     end
+
+    it "appends query_params to the URL" do
+      stub = stub_request(:get, "#{base}/object/avatars/x.png")
+             .with(query: { "x" => "1" })
+             .to_return(status: 200, body: "bytes")
+
+      expect(bucket.download("x.png", query_params: { x: 1 })).to eq("bytes")
+      expect(stub).to have_been_requested
+    end
+
+    it "merges query_params on top of transform-derived query" do
+      stub = stub_request(:get, "#{base}/render/image/authenticated/avatars/x.png")
+             .with(query: { "width" => "200", "x" => "1" })
+             .to_return(status: 200, body: "bytes")
+
+      expect(
+        bucket.download("x.png", transform: { width: 200 }, query_params: { x: 1 })
+      ).to eq("bytes")
+      expect(stub).to have_been_requested
+    end
   end
 
   # ---------------------------------------------------------------------------

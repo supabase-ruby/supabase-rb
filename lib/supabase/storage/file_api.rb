@@ -55,15 +55,14 @@ module Supabase
 
       # When `transform:` is provided, the request is routed through the image
       # rendering endpoint (`render/image/authenticated`) and the transform opts
-      # are passed as query params. Mirrors supabase-py's DownloadOptions /
-      # TransformOptions split.
-      def download(path, transform: nil)
+      # are passed as query params. `query_params:` adds arbitrary query params
+      # on top (merged after transform — explicit query_params win on conflict).
+      # Mirrors supabase-py's DownloadOptions / TransformOptions split.
+      def download(path, transform: nil, query_params: nil)
         render_path = transform ? %w[render image authenticated] : %w[object]
-        query = if transform
-                  transform.transform_keys(&:to_s).transform_values(&:to_s)
-                else
-                  {}
-                end
+        query = {}
+        query.merge!(transform.transform_keys(&:to_s).transform_values(&:to_s)) if transform
+        query.merge!(query_params.transform_keys(&:to_s).transform_values(&:to_s)) if query_params
 
         parts = Utils.relative_path_to_parts(path)
         response = _request(:get, [*render_path, @id, *parts], raw_response: true, query: query)
