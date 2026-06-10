@@ -55,6 +55,18 @@ that project's CHANGELOG for the historical upstream context behind each port.
   `propagate_auth` (used by the `on_auth_state_change` listener) now
   share a single internal path.
 
+### Removed (breaking)
+
+- **`Supabase::Realtime::Errors::NotConnectedError`,
+  `Supabase::Realtime::Errors::AuthorizationError`,
+  `Supabase::Realtime::Errors::PushTimeoutError`** — all three were
+  declared but never raised anywhere in the codebase, mirroring
+  supabase-py's removal of the same dead aliases. The umbrella
+  re-exports `Supabase::NotConnectedError` and
+  `Supabase::AuthorizationError` are removed alongside them. Callers
+  rescuing these names should switch to the base
+  `Supabase::Realtime::Errors::RealtimeError`.
+
 ## [3.1.1] — Remaining P1 + MISSING parity gaps
 
 Wraps up the remaining items from the supabase-py audit. All additions

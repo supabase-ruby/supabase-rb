@@ -12,7 +12,6 @@ module Supabase
   #   rescue Supabase::StorageException        => e   # storage
   #   rescue Supabase::AuthApiError            => e   # auth
   #   rescue Supabase::FunctionsHttpError      => e   # functions
-  #   rescue Supabase::AuthorizationError      => e   # realtime
   #
   # The actual classes live in their sub-namespaces; these are aliases.
 
@@ -41,12 +40,6 @@ module Supabase
     FunctionsError      = Functions::Errors::FunctionsError      if defined?(Functions::Errors::FunctionsError)
     FunctionsHttpError  = Functions::Errors::FunctionsHttpError  if defined?(Functions::Errors::FunctionsHttpError)
     FunctionsRelayError = Functions::Errors::FunctionsRelayError if defined?(Functions::Errors::FunctionsRelayError)
-  end
-
-  # Realtime
-  if defined?(Realtime::Errors)
-    AuthorizationError = Realtime::Errors::AuthorizationError if defined?(Realtime::Errors::AuthorizationError)
-    NotConnectedError  = Realtime::Errors::NotConnectedError  if defined?(Realtime::Errors::NotConnectedError)
   end
 
   # Raised by {Supabase.create_client} on a missing url/key. Mirrors py's
