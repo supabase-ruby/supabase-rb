@@ -16,15 +16,15 @@ module Supabase
     # and dispatches inbound frames to whichever channel owns the topic.
     #
     # Bring your own {Socket} (e.g. websocket-client-simple adapter or async-websocket
-    # adapter). For unit tests, pass a {TestSocket}.
+    # adapter). For unit tests, pass a {TestSocket}. If no transport is supplied,
+    # a default {Sockets::WebsocketClientSimple} adapter is constructed
+    # automatically so `Supabase.create_client(...).realtime.channel(...).subscribe`
+    # works out of the box.
     #
-    #   socket   = Supabase::Realtime::TestSocket.new
     #   client   = Supabase::Realtime::Client.new(
     #     url: "wss://project.supabase.co/realtime/v1",
-    #     params: { apikey: key },
-    #     socket: socket
+    #     params: { apikey: key }
     #   )
-    #   client.connect
     #
     #   channel = client.channel("realtime:public:users")
     #   channel.on_postgres_changes("*", schema: "public", table: "users") { |p| puts p }
@@ -35,14 +35,17 @@ module Supabase
 
       # @param url    [String] WebSocket endpoint (ws:// or wss://). Plain http(s) are upgraded.
       # @param params [Hash]   query-string params merged onto the URL (e.g. apikey/access_token)
-      # @param socket [Socket, nil] inject your own transport (defaults to nil — caller wires it up)
+      # @param transport [Socket, nil] inject your own transport. If nil, the production
+      #   websocket-client-simple adapter is constructed from URL+params.
+      # @param socket [Socket, nil] deprecated alias for `transport:` — kept for back compat.
       # @param timeout [Numeric] default per-push timeout (seconds)
       # @param heartbeat_interval [Numeric] seconds between automatic heartbeat pushes (0 disables)
       # @param auto_reconnect [Boolean] reconnect on unexpected socket close
       # @param max_retries [Integer] maximum reconnect attempts before giving up
       # @param initial_backoff [Numeric] seconds of delay before the first reconnect attempt;
       #   doubles each attempt up to a 60s cap (matches supabase-py)
-      def initialize(url:, params: {}, socket: nil, timeout: Types::DEFAULT_TIMEOUT_SECONDS,
+      def initialize(url:, params: {}, transport: nil, socket: nil,
+                     timeout: Types::DEFAULT_TIMEOUT_SECONDS,
                      heartbeat_interval: Types::DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
                      auto_reconnect: true, max_retries: 5, initial_backoff: 1.0)
         unless Transformers.is_ws_url(url)
@@ -54,7 +57,7 @@ module Supabase
         @params  = params
         @access_token = params[:access_token] || params["access_token"]
         @channels = {}
-        @socket   = socket
+        @socket   = transport || socket || build_default_transport
         @timeout  = timeout
         @ref      = 0
 
@@ -79,7 +82,10 @@ module Supabase
       end
 
       def connect
-        raise Errors::RealtimeError, "no socket attached — call #use_socket(socket) first" unless @socket
+        unless @socket
+          @socket = build_default_transport
+          attach_socket
+        end
 
         @intentionally_closed = false
         @socket.connect
@@ -197,6 +203,16 @@ module Supabase
       # calls, so the rb port uses `push` instead.
 
       private
+
+      # Lazy-construct the production WebSocket transport. Lives behind an autoload
+      # so that callers who inject their own `transport:` don't pay the cost of
+      # `require "websocket-client-simple"`, and so that the dependency only loads
+      # once it's actually needed (matches the per-adapter require pattern in
+      # lib/supabase/realtime/sockets/*).
+      def build_default_transport
+        require_relative "sockets/websocket_client_simple"
+        Sockets::WebsocketClientSimple.new(url: @url)
+      end
 
       def attach_socket
         @socket.on_message { |raw| handle_inbound(raw) }

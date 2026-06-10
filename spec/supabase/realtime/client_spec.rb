@@ -43,19 +43,30 @@ RSpec.describe Supabase::Realtime::Client do
       expect(client.connected?).to be false
     end
 
-    it "raises if no socket has been attached" do
+    it "auto-constructs a default transport when none is provided (US-012)" do
+      # US-012 changed `connect` from raising "no socket attached" to building a
+      # default Sockets::WebsocketClientSimple lazily. Stub the class so the
+      # spec doesn't open a real TCP socket — we only need to assert the
+      # construction path.
+      require "supabase/realtime/sockets/websocket_client_simple"
+      fake = Supabase::Realtime::TestSocket.new
+      allow(Supabase::Realtime::Sockets::WebsocketClientSimple)
+        .to receive(:new).and_return(fake)
+
       bare = described_class.new(url: "wss://x")
-      expect { bare.connect }
-        .to raise_error(Supabase::Realtime::Errors::RealtimeError, /no socket/)
+      expect(bare.socket).to be(fake)
+      bare.connect
+      expect(bare.connected?).to be true
     end
   end
 
   describe "#use_socket" do
-    it "wires a socket after construction" do
-      bare = described_class.new(url: "wss://x")
+    it "swaps in a socket after construction" do
+      bare = described_class.new(url: "wss://x", socket: Supabase::Realtime::TestSocket.new)
       bare.use_socket(socket)
       bare.connect
       expect(bare.connected?).to be true
+      expect(bare.socket).to be(socket)
     end
   end
 
@@ -182,15 +193,20 @@ RSpec.describe Supabase::Realtime::Client do
 
   describe "send_buffer (offline pushes)" do
     it "buffers frames pushed before the socket connects and flushes them on open" do
-      # Subscribe before connect — Channel#send_push reaches Client#push while
-      # the socket is still closed, so the frame must be queued, not dropped.
-      ch = client.channel("topic:buffer")
-      ch.subscribe
+      # US-012 made `channel.subscribe` auto-connect, so we drive Client#push
+      # directly to exercise the offline-buffering path (still used by
+      # channel.send_broadcast / push_event between an unexpected close and
+      # the auto-reconnect).
+      msg = Supabase::Realtime::Message.new(
+        event: "broadcast", topic: "realtime:topic:buffer", payload: { "x" => 1 },
+        ref: "1", join_ref: "1"
+      )
+      client.push(msg)
       expect(socket.sent_frames).to be_empty
 
       client.connect
       events = socket.sent_frames.map { |f| JSON.parse(f)["event"] }
-      expect(events).to include("phx_join")
+      expect(events).to include("broadcast")
     end
   end
 end

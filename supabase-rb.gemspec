@@ -34,6 +34,11 @@ Gem::Specification.new do |spec|
   spec.add_dependency "faraday", "~> 2.0"
   spec.add_dependency "faraday-multipart", "~> 1.0"
   spec.add_dependency "jwt", "~> 2.8"
+  # websocket-client-simple powers the default Realtime transport so
+  # `Supabase.create_client(...).realtime.channel(...).subscribe { }` works
+  # out of the box (US-012). Async users still pin `async-websocket` as a
+  # dev dep and inject it via `Realtime::Client.new(transport: ...)`.
+  spec.add_dependency "websocket-client-simple", "~> 0.9"
 
   spec.add_development_dependency "rspec", "~> 3.12"
   spec.add_development_dependency "simplecov", "~> 0.22"
@@ -41,6 +46,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "faker", "~> 3.2"
   spec.add_development_dependency "async", "~> 2.0"
   spec.add_development_dependency "async-http-faraday", "~> 0.20"
-  spec.add_development_dependency "websocket-client-simple", "~> 0.9"
   spec.add_development_dependency "async-websocket", "~> 0.30"
 end

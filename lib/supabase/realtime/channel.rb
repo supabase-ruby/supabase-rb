@@ -71,6 +71,11 @@ module Supabase
 
         inject_postgres_changes_bindings
         @join_push.instance_variable_set(:@ref, @socket&.next_ref)
+        # Make subscribe a one-call entry point: if the caller hasn't already
+        # connected the underlying transport, open it now so the join frame
+        # actually reaches the wire instead of being held forever in the
+        # Client#send_buffer. Matches supabase-py's `channel.subscribe()` ergonomics.
+        @socket.connect if @socket && !@socket.connected?
         send_push(@join_push, register_pending: true)
         self
       end
