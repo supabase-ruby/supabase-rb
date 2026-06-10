@@ -4,6 +4,7 @@ require_relative "errors"
 require_relative "message"
 require_relative "presence"
 require_relative "push"
+require_relative "timer"
 require_relative "types"
 
 module Supabase
@@ -16,7 +17,7 @@ module Supabase
     #
     # Should be constructed via {Client#channel}, not directly.
     class Channel
-      attr_reader :topic, :params, :state, :join_push, :presence, :pending_pushes
+      attr_reader :topic, :params, :state, :join_push, :presence, :pending_pushes, :rejoin_timer
 
       def initialize(topic, params: nil, socket: nil)
         @topic   = topic
@@ -37,6 +38,11 @@ module Supabase
 
         @join_push = Push.new(self, Types::ChannelEvents::JOIN, @params)
         @subscribe_callback = nil
+
+        @rejoin_timer = Timer.new(
+          callback: -> { rejoin if @joined_once && !leaving? && !closed? },
+          backoff:  ->(tries) { [(2.0**tries), 60.0].min }
+        )
 
         @join_push
           .receive(Types::AckStatus::OK)      { |p| on_join_ok(p) }
@@ -413,17 +419,20 @@ module Supabase
         end
 
         @state = Types::ChannelStates::JOINED
+        @rejoin_timer.reset
         flush_push_buffer
         @subscribe_callback&.call(Types::SubscribeStates::SUBSCRIBED, nil)
       end
 
       def on_join_error(payload)
         @state = Types::ChannelStates::ERRORED
+        @rejoin_timer.schedule_timeout
         @subscribe_callback&.call(Types::SubscribeStates::CHANNEL_ERROR, payload)
       end
 
       def on_join_timeout
         @state = Types::ChannelStates::ERRORED
+        @rejoin_timer.schedule_timeout
         @subscribe_callback&.call(Types::SubscribeStates::TIMED_OUT, nil)
       end
 

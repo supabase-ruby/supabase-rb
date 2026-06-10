@@ -31,6 +31,13 @@ websocket-client-simple adapter runs the read loop on a background thread,
 which means listener callbacks fire on that thread — bring your own
 thread-safety to anything they touch.
 
+The same caveat applies to the channel rejoin timer: after a join error or
+timeout, the channel schedules a retry via `Supabase::Realtime::Timer`, which
+runs the rejoin on a background thread once the backoff delay elapses.
+Anything the rejoin path mutates (state shared with listener callbacks, the
+underlying `Socket`, etc.) must tolerate being touched from an arbitrary
+thread — consistent with the existing listener-thread model.
+
 ## Usage
 
 ```ruby
