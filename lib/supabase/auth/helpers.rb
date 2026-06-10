@@ -102,6 +102,10 @@ module Supabase
         end
 
         begin
+          if exception.is_a?(Faraday::TimeoutError) || exception.response.nil?
+            return Errors::AuthRetryableError.new(exception.message, status: 0)
+          end
+
           response = exception.response
           status = response[:status]
 
