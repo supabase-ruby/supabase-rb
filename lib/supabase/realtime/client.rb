@@ -322,8 +322,12 @@ module Supabase
 
       def rejoin_channels
         @channels.each do |channel|
-          next unless channel.instance_variable_get(:@joined_once)
-          next if channel.joining?
+          # Only rejoin channels the caller still cares about: JOINED (live
+          # subscription that the socket close interrupted) or JOINING (join
+          # handshake was in flight when the socket dropped). After
+          # `unsubscribe` a channel is LEAVING or CLOSED — rejoining it would
+          # silently revive a subscription the caller explicitly tore down.
+          next unless channel.joined? || channel.joining?
 
           channel.rejoin
         end
