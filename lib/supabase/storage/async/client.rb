@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "async/http/faraday"
+require "faraday/follow_redirects"
 require_relative "../client"
 
 module Supabase
@@ -36,13 +37,15 @@ module Supabase
       class Client < Supabase::Storage::Client
         private
 
+        # Mirrors {Supabase::Storage::Client#build_session} (default timeout=20,
+        # follow_redirects middleware, no HTTP/2 — see that method's docstring
+        # for the parity rationale) and only swaps the adapter for async_http.
         def build_session(base_url)
           Faraday.new(url: base_url, ssl: { verify: @verify }, proxy: @proxy) do |f|
             f.request :multipart
-            if @timeout
-              f.options.timeout = @timeout
-              f.options.open_timeout = @timeout
-            end
+            f.response :follow_redirects
+            f.options.timeout = @timeout || 20
+            f.options.open_timeout = @timeout || 20
             f.adapter :async_http
           end
         end

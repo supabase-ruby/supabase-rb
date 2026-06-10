@@ -19,6 +19,31 @@ RSpec.describe Supabase::Storage::Client do
     end
   end
 
+  describe "Faraday session wiring (US-036)" do
+    it "defaults options.timeout to 20s when caller doesn't pass timeout" do
+      c = described_class.new(base_url: "https://x/v1")
+      conn = c.instance_variable_get(:@session)
+      expect(conn.options.timeout).to eq(20)
+      expect(conn.options.open_timeout).to eq(20)
+    end
+
+    it "honours explicit timeout: when passed" do
+      c = described_class.new(base_url: "https://x/v1", timeout: 5)
+      conn = c.instance_variable_get(:@session)
+      expect(conn.options.timeout).to eq(5)
+      expect(conn.options.open_timeout).to eq(5)
+    end
+
+    it "installs the follow_redirects response middleware" do
+      c = described_class.new(base_url: "https://x/v1")
+      conn = c.instance_variable_get(:@session)
+      handler_names = conn.builder.handlers.map { |h| h.klass.name }
+      expect(handler_names).to include("FaradayMiddleware::FollowRedirects").or(
+        include("Faraday::FollowRedirects::Middleware")
+      )
+    end
+  end
+
   describe "#from / #bucket" do
     let(:client) { described_class.new(base_url: "https://x/v1") }
 

@@ -32,6 +32,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "faraday", "~> 2.0"
+  spec.add_dependency "faraday-follow_redirects", "~> 0.3"
   spec.add_dependency "faraday-multipart", "~> 1.0"
   spec.add_dependency "jwt", "~> 2.8"
   # websocket-client-simple powers the default Realtime transport so
