@@ -71,7 +71,22 @@ module Supabase
 
       @supabase_url = supabase_url.to_s.chomp("/")
       @supabase_key = supabase_key
-      @options      = options || {}
+      # Plain Hash → ClientOptions: paritet with supabase-py, where every
+      # option flows through a typed dataclass. The legacy nested
+      # `{ auth: {...}, postgrest: {...}, global: { headers: {...} } }` shape
+      # is kept as a raw Hash so existing callers don't break — anything
+      # else is canonicalized into a ClientOptions struct so the per-sub-
+      # client kwargs derivation has one code path.
+      legacy_hash_shape =
+        options.is_a?(Hash) &&
+          options.keys.any? { |k| %i[auth postgrest storage functions realtime global].include?(k.to_sym) }
+
+      @options =
+        if options.is_a?(Hash) && !legacy_hash_shape
+          ClientOptions.new(**options.transform_keys(&:to_sym))
+        else
+          options
+        end
       @async        = async
 
       configured_headers =
@@ -247,7 +262,7 @@ module Supabase
       case key
       when :auth
         { auto_refresh_token: o.auto_refresh_token, persist_session: o.persist_session,
-          storage: o.storage, flow_type: o.flow_type }.compact
+          storage: o.storage, flow_type: o.flow_type, http_client: o.http_client }.compact
       when :postgrest
         { schema: o.schema, timeout: o.postgrest_client_timeout, http_client: o.http_client }.compact
       when :storage

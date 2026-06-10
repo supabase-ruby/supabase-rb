@@ -12,7 +12,7 @@ RSpec.describe Supabase::ClientOptions do
       expect(opts.flow_type).to          eq("pkce")
       expect(opts.postgrest_client_timeout).to eq(120)
       expect(opts.storage_client_timeout).to   eq(20)
-      expect(opts.function_client_timeout).to  eq(60)
+      expect(opts.function_client_timeout).to  eq(5)
     end
 
     it "stamps the X-Client-Info header automatically" do

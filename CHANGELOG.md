@@ -9,6 +9,24 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ### Changed (breaking)
 
+- **`Supabase::ClientOptions::DEFAULT_FUNCTIONS_TIMEOUT` dropped from `60` to
+  `5` seconds.** This aligns the default Edge Functions invocation timeout
+  with supabase-py's `function_client_timeout=5`. The previous 60s value was
+  a long-running source of "why does my Edge Function call hang for a
+  minute before erroring" reports — callers that legitimately need long-
+  running invocations should now pass an explicit
+  `Supabase::ClientOptions.new(function_client_timeout: 60)` (or any other
+  number) at construction. (US-031 / F-C12.)
+- **`Supabase::Client.new(options: <Hash>)` now canonicalizes the Hash into a
+  `Supabase::ClientOptions` struct.** A plain `{}` becomes
+  `ClientOptions.new` (defaults), and keyword shapes like
+  `{ schema: "private", function_client_timeout: 10 }` are forwarded to the
+  struct constructor. The legacy `{ global: { headers: { ... } } }` shape is
+  still recognized as a raw Hash for backwards compatibility. This means
+  callers who relied on `Client.new(options: {})` now get the py-aligned
+  defaults — most notably `auth.flow_type == "pkce"` (instead of GoTrue's
+  `"implicit"` default) and a 5s Functions timeout (see above). (US-031.)
+
 - **`Supabase::Functions::Client#invoke` no longer accepts the `method:` or
   `query:` kwargs.** Both existed only to mirror the supabase-js surface
   and had no counterpart in supabase-py — keeping them was a long-running

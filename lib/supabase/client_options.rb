@@ -23,7 +23,7 @@ module Supabase
   class ClientOptions
     DEFAULT_POSTGREST_TIMEOUT = 120
     DEFAULT_STORAGE_TIMEOUT   = 20
-    DEFAULT_FUNCTIONS_TIMEOUT = 60
+    DEFAULT_FUNCTIONS_TIMEOUT = 5
 
     DEFAULT_HEADERS = { "X-Client-Info" => "supabase-rb/#{Supabase::VERSION}" }.freeze
 
