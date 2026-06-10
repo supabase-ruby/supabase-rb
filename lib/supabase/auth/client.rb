@@ -545,8 +545,8 @@ module Supabase
         session = get_session
         raise Errors::AuthSessionMissing unless session
 
-        data = _request("GET", "reauthenticate", jwt: session.access_token)
-        Helpers.parse_auth_response(data)
+        _request("GET", "reauthenticate", jwt: session.access_token)
+        Types::AuthResponse.new(user: nil, session: nil)
       end
 
       # Send a password reset email. Does not require an active session.
