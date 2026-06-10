@@ -126,5 +126,16 @@ RSpec.describe Supabase::Postgrest::Client do
       rpc = client.rpc("fn", {}, count: "exact")
       expect(rpc.request.headers["Prefer"]).to eq("count=exact")
     end
+
+    describe "client-level Prefer wins over per-call (US-033)" do
+      it "client headers override the per-call Prefer set by count:" do
+        client_with_prefer = described_class.new(
+          base_url: "https://example.com/rest/v1",
+          headers: { "Prefer" => "tx=rollback" }
+        )
+        rpc = client_with_prefer.rpc("fn", {}, count: "exact")
+        expect(rpc.request.headers["Prefer"]).to eq("tx=rollback")
+      end
+    end
   end
 end

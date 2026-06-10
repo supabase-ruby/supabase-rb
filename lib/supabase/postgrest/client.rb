@@ -136,8 +136,9 @@ module Supabase
                    "POST"
                  end
 
-        headers = @headers.dup
+        headers = {}
         headers["Prefer"] = "count=#{count}" if count
+        headers.merge!(@headers)
 
         if %w[HEAD GET].include?(method)
           query = stringify_keys(params)
