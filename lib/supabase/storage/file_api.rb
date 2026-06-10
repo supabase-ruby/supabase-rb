@@ -53,9 +53,20 @@ module Supabase
 
       # ----- Download -----
 
-      def download(path)
+      # When `transform:` is provided, the request is routed through the image
+      # rendering endpoint (`render/image/authenticated`) and the transform opts
+      # are passed as query params. Mirrors supabase-py's DownloadOptions /
+      # TransformOptions split.
+      def download(path, transform: nil)
+        render_path = transform ? %w[render image authenticated] : %w[object]
+        query = if transform
+                  transform.transform_keys(&:to_s).transform_values(&:to_s)
+                else
+                  {}
+                end
+
         parts = Utils.relative_path_to_parts(path)
-        response = _request(:get, ["object", @id, *parts], raw_response: true)
+        response = _request(:get, [*render_path, @id, *parts], raw_response: true, query: query)
         response.body
       end
 
@@ -196,7 +207,8 @@ module Supabase
         send_multipart(:put, ["object", "upload", "sign", @id, *parts],
                        file: file, filename: parts.last, content_type: content_type,
                        cache_control: cache_control, upsert: nil, metadata: metadata,
-                       extra_headers: headers, query: { "token" => token })
+                       extra_headers: headers, query: { "token" => token },
+                       relative_path: parts.join("/"))
       end
 
       private
@@ -207,10 +219,11 @@ module Supabase
                        file: file, filename: parts.last,
                        content_type: content_type, cache_control: cache_control,
                        upsert: omit_upsert ? nil : upsert,
-                       metadata: metadata, extra_headers: headers)
+                       metadata: metadata, extra_headers: headers,
+                       relative_path: parts.join("/"))
       end
 
-      def send_multipart(method, segments, file:, filename:, content_type:, cache_control:, upsert:, metadata:, extra_headers:, query: nil)
+      def send_multipart(method, segments, file:, filename:, content_type:, cache_control:, upsert:, metadata:, extra_headers:, query: nil, relative_path: nil)
         request_headers = {}
         request_headers["cache-control"] = "max-age=#{cache_control}" if cache_control
         request_headers["x-upsert"]      = upsert.to_s unless upsert.nil?
@@ -240,7 +253,11 @@ module Supabase
         response = @session.run_request(method, url, form, merged_headers)
         raise_for_status(response)
         parsed = parse_json(response.body) || {}
-        Types::UploadResponse.from_hash(path: segments[2..].join("/"), key: parsed["Key"])
+        # Caller passes the user-facing relative path explicitly: index slicing
+        # off `segments` would yield "sign/<bucket>/<path>" for upload_to_signed_url
+        # (segments: ["object","upload","sign",@id,*parts]) instead of just <path>.
+        upload_path = relative_path || segments[2..].join("/")
+        Types::UploadResponse.from_hash(path: upload_path, key: parsed["Key"])
       end
 
       def build_upload_io(file, filename, content_type)

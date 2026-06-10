@@ -64,6 +64,9 @@ module Supabase
       end
 
       alias table from
+      # Compat alias for snippets ported from supabase-py where `from` is a
+      # reserved keyword and the method is named `from_`.
+      alias from_ from
 
       # Stored procedure call.
       # @param func [String] function name

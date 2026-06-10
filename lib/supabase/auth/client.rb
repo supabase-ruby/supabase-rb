@@ -1205,7 +1205,7 @@ module Supabase
         payload = decoded[:payload]
 
         aal = payload["aal"]
-        amr = payload["amr"] || []
+        amr_entries = (payload["amr"] || []).map { |entry| Types::AMREntry.from_hash(entry) }.compact
 
         verified_factors = (session.user&.factors || []).select { |f| f.status == "verified" }
         next_level = verified_factors.any? ? "aal2" : aal
@@ -1213,7 +1213,7 @@ module Supabase
         Types::AuthMFAGetAuthenticatorAssuranceLevelResponse.new(
           current_level: aal,
           next_level: next_level,
-          current_authentication_methods: amr
+          current_authentication_methods: amr_entries
         )
       end
     end

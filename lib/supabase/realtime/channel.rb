@@ -138,6 +138,34 @@ module Supabase
         self
       end
 
+      # Convenience wrappers around the underlying `channel.presence` object,
+      # matching supabase-py's `channel.on_presence_sync/join/leave` API. If
+      # called after the channel is already joined, the channel resubscribes so
+      # the server starts forwarding presence events (presence has to be enabled
+      # in the join config — see #default_params).
+      def on_presence_sync(&block)
+        @presence.on_sync(&block)
+        resubscribe_for_presence!
+        self
+      end
+
+      def on_presence_join(&block)
+        @presence.on_join(&block)
+        resubscribe_for_presence!
+        self
+      end
+
+      def on_presence_leave(&block)
+        @presence.on_leave(&block)
+        resubscribe_for_presence!
+        self
+      end
+
+      # Shortcut for `channel.presence.state` so callers don't have to drill in.
+      def presence_state
+        @presence.state
+      end
+
       # ----- Outbound -----
 
       # Send a custom broadcast message. The server will forward it to other
@@ -214,7 +242,9 @@ module Supabase
       # Mirrors phoenix.js / supabase-py: every registered on_postgres_changes
       # listener is serialized into config.postgres_changes on the join payload
       # so the server filters before sending, instead of shipping every change
-      # for the topic and forcing the client to drop most of them.
+      # for the topic and forcing the client to drop most of them. Also flips
+      # config.presence.enabled when any presence callback is attached, so the
+      # server starts emitting presence_state/diff frames.
       def inject_postgres_changes_bindings
         config = (@join_push.payload["config"] ||= {})
         config["postgres_changes"] = @postgres_changes_callbacks.map do |binding|
@@ -224,6 +254,21 @@ module Supabase
           entry["filter"] = binding[:filter] if binding[:filter]
           entry
         end
+
+        presence_cfg = (config["presence"] ||= {})
+        presence_cfg["enabled"] = true if @presence.any_callbacks?
+      end
+
+      # If a presence callback is added after the channel is already joined,
+      # the server's join config is stale (presence.enabled is still false), so
+      # we resubscribe to send a fresh join payload. Matches py's _resubscribe.
+      def resubscribe_for_presence!
+        return unless joined?
+
+        unsubscribe
+        @joined_once = false
+        @join_push.instance_variable_set(:@received_status, nil)
+        subscribe(&@subscribe_callback)
       end
 
       def send_push(push, register_pending:)

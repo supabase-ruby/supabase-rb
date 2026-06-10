@@ -50,6 +50,8 @@ module Supabase
       end
 
       alias bucket from
+      # Compat alias for snippets ported from supabase-py (`storage.from_(id)`).
+      alias from_ from
 
       # Iceberg / analytics bucket management. Mirrors storage3's
       # `SyncStorageClient#analytics`.

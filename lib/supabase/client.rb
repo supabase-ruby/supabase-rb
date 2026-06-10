@@ -100,9 +100,11 @@ module Supabase
       postgrest.rpc(func, params, **opts)
     end
 
+    # Return a Postgrest client scoped to `name` without mutating self. Matches
+    # supabase-py: `client.schema("foo").from_("x")` queries the foo schema but
+    # leaves `client.from(...)` (and other call sites) on the default schema.
     def schema(name)
-      @postgrest = postgrest.schema(name)
-      self
+      postgrest.schema(name)
     end
 
     # --- Shared auth context -------------------------------------------------

@@ -280,6 +280,34 @@ RSpec.describe Supabase::Realtime::Channel do
     end
   end
 
+  describe "presence callbacks at the channel level" do
+    it "channel.on_presence_sync delegates to channel.presence.on_sync" do
+      fired = false
+      channel.on_presence_sync { fired = true }
+      channel.presence.sync_state({ "u1" => { "metas" => [{ "phx_ref" => "r1" }] } })
+      expect(fired).to be true
+    end
+
+    it "channel.on_presence_join delegates to channel.presence.on_join" do
+      received = nil
+      channel.on_presence_join { |key, _, _| received = key }
+      channel.presence.sync_state({ "u1" => { "metas" => [{ "phx_ref" => "r1" }] } })
+      expect(received).to eq("u1")
+    end
+
+    it "channel.presence_state mirrors channel.presence.state" do
+      channel.presence.sync_state({ "u1" => { "metas" => [{ "phx_ref" => "r1" }] } })
+      expect(channel.presence_state).to eq(channel.presence.state)
+    end
+
+    it "flips config.presence.enabled when a presence callback is attached before subscribe" do
+      channel.on_presence_sync { }
+      channel.subscribe
+      payload = JSON.parse(socket.last_sent_frame.to_json)["payload"]
+      expect(payload.dig("config", "presence", "enabled")).to be true
+    end
+  end
+
   describe "postgres_changes server/client binding mismatch" do
     it "unsubscribes and reports CHANNEL_ERROR when server bindings don't match" do
       state = err = nil

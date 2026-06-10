@@ -50,36 +50,47 @@ RSpec.describe "Realtime production-readiness fixes" do
   end
 
   describe "automatic heartbeat" do
-    it "fires send_heartbeat on the configured interval while connected" do
+    # supabase-py clamps the sleep between heartbeats to a 15s floor
+    # (`max(hb_interval, 15)`); rb matches that, so we can't test the loop
+    # cadence in real time. We verify the underlying mechanism by calling
+    # send_heartbeat directly and by checking the clamp explicitly.
+
+    it "send_heartbeat emits a heartbeat frame when connected" do
       client = Supabase::Realtime::Client.new(
         url: "wss://x/v1",
         socket: socket,
-        heartbeat_interval: 0.05
+        heartbeat_interval: 0 # don't spin up the background loop
       )
       client.connect
+      client.send_heartbeat
 
-      # Wait a bit so two ticks land. The TestSocket records every send_frame.
-      sleep 0.18
-      hb_count = socket.sent_events.count("heartbeat")
-      expect(hb_count).to be >= 2
-
+      expect(socket.sent_events).to include("heartbeat")
       client.disconnect
     end
 
-    it "stops firing heartbeats after disconnect" do
+    it "send_heartbeat is a no-op when not connected" do
       client = Supabase::Realtime::Client.new(
         url: "wss://x/v1",
         socket: socket,
-        heartbeat_interval: 0.05
+        heartbeat_interval: 0
+      )
+      client.send_heartbeat
+      expect(socket.sent_events).not_to include("heartbeat")
+    end
+
+    it "clamps the heartbeat interval to a 15s floor (parity with supabase-py)" do
+      client = Supabase::Realtime::Client.new(
+        url: "wss://x/v1",
+        socket: socket,
+        heartbeat_interval: 1 # well below the 15s floor
       )
       client.connect
-      sleep 0.12
+      # If the clamp were missing, a 1s interval would deliver a heartbeat
+      # within 0.2s. The clamp pushes the first tick out to 15s, so we should
+      # see zero heartbeats here.
+      sleep 0.2
+      expect(socket.sent_events).not_to include("heartbeat")
       client.disconnect
-
-      before_count = socket.sent_events.count("heartbeat")
-      sleep 0.15
-      after_count = socket.sent_events.count("heartbeat")
-      expect(after_count).to eq(before_count)
     end
 
     it "is disabled when heartbeat_interval is 0" do

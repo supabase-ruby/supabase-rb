@@ -69,7 +69,18 @@ RSpec.describe Supabase::Realtime::Client do
     it "tracks channels in #get_channels" do
       client.channel("topic:1")
       client.channel("topic:2")
-      expect(client.get_channels.map(&:topic)).to contain_exactly("topic:1", "topic:2")
+      expect(client.get_channels.map(&:topic))
+        .to contain_exactly("realtime:topic:1", "realtime:topic:2")
+    end
+
+    it "auto-prefixes 'realtime:' for parity with supabase-py" do
+      ch = client.channel("public:users")
+      expect(ch.topic).to eq("realtime:public:users")
+    end
+
+    it "leaves topics that already start with 'realtime:' alone" do
+      ch = client.channel("realtime:public:users")
+      expect(ch.topic).to eq("realtime:public:users")
     end
   end
 
@@ -156,7 +167,7 @@ RSpec.describe Supabase::Realtime::Client do
       @ch2.on_broadcast("e") { hit2 = true }
 
       socket.inject(
-        "event"   => "broadcast", "topic" => "topic:1",
+        "event"   => "broadcast", "topic" => "realtime:topic:1",
         "payload" => { "event" => "e", "payload" => {} }
       )
 

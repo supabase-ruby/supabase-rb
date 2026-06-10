@@ -139,10 +139,12 @@ RSpec.describe Supabase::Client do
       expect(rpc.request.path).to eq("/rest/v1/rpc/inc_by")
     end
 
-    it "#schema('private') swaps the postgrest client to a private-schema one and chains" do
-      result = client.schema("private")
-      expect(result).to be(client)
-      expect(client.postgrest.schema_name).to eq("private")
+    it "#schema('private') returns a scoped Postgrest client without mutating self" do
+      scoped = client.schema("private")
+      expect(scoped).to be_a(Supabase::Postgrest::Client)
+      expect(scoped.schema_name).to eq("private")
+      # Self stays on the default schema — matches supabase-py's behavior.
+      expect(client.postgrest.schema_name).to eq("public")
     end
   end
 

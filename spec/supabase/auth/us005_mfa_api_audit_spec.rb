@@ -613,7 +613,11 @@ RSpec.describe "US-005: MFA API Methods Audit" do
       response = client.mfa.get_authenticator_assurance_level
 
       expect(response.current_authentication_methods.size).to eq(2)
-      expect(response.current_authentication_methods).to eq(amr_entries)
+      # Returned as [AMREntry, ...] objects (matches supabase-py's
+      # types.AMREntry), not raw Hash.
+      expect(response.current_authentication_methods).to all(be_a(Supabase::Auth::Types::AMREntry))
+      expect(response.current_authentication_methods.map(&:method)).to eq(%w[password totp])
+      expect(response.current_authentication_methods.map(&:timestamp)).to eq([1234567890, 1234567900])
     end
 
     it "handles missing amr in JWT payload (defaults to empty array, matching Python)" do

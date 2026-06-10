@@ -31,6 +31,24 @@ module Supabase
           CA_CENTRAL_1, EU_CENTRAL_1, EU_WEST_1, EU_WEST_2, EU_WEST_3,
           SA_EAST_1, US_EAST_1, US_WEST_1, US_WEST_2
         ].freeze
+
+        # PascalCase aliases mirroring supabase-py's FunctionRegion StrEnum, so
+        # snippets ported from py (`FunctionRegion.UsEast1`) work without edits.
+        Any            = ANY
+        ApNortheast1   = AP_NORTHEAST_1
+        ApNortheast2   = AP_NORTHEAST_2
+        ApSouth1       = AP_SOUTH_1
+        ApSoutheast1   = AP_SOUTHEAST_1
+        ApSoutheast2   = AP_SOUTHEAST_2
+        CaCentral1     = CA_CENTRAL_1
+        EuCentral1     = EU_CENTRAL_1
+        EuWest1        = EU_WEST_1
+        EuWest2        = EU_WEST_2
+        EuWest3        = EU_WEST_3
+        SaEast1        = SA_EAST_1
+        UsEast1        = US_EAST_1
+        UsWest1        = US_WEST_1
+        UsWest2        = US_WEST_2
       end
     end
   end

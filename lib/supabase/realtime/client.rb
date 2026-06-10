@@ -88,14 +88,23 @@ module Supabase
         self
       end
 
+      # Compat alias mirroring supabase-py's `client.close()`.
+      alias close disconnect
+
       def connected?
         @socket && @socket.connected?
       end
 
       # Get or create a Channel for the given topic. Subsequent calls with the
       # same topic return the same Channel instance, matching phoenix.js semantics.
+      #
+      # Topic names are auto-prefixed with `"realtime:"` to match supabase-py:
+      # `client.channel("public:users")` reaches the same channel as
+      # `client.channel("realtime:public:users")`. Pre-prefixed topics are left
+      # alone so existing code keeps working.
       def channel(topic, params: nil)
-        @channels[topic] ||= Channel.new(topic, params: params, socket: self)
+        full_topic = topic.start_with?("realtime:") ? topic : "realtime:#{topic}"
+        @channels[full_topic] ||= Channel.new(full_topic, params: params, socket: self)
       end
 
       def get_channels
@@ -176,6 +185,10 @@ module Supabase
         end
       end
 
+      # NOTE: supabase-py exposes this as `client.send(message)`. In Ruby that
+      # name would shadow Object#send and break reflective `obj.send(:method)`
+      # calls, so the rb port uses `push` instead.
+
       private
 
       def attach_socket
@@ -218,7 +231,9 @@ module Supabase
         return if @heartbeat_interval.nil? || @heartbeat_interval <= 0
         return if @heartbeat_thread&.alive?
 
-        interval = @heartbeat_interval
+        # Mirror supabase-py: clamp to a 15s floor so an overeager caller can't
+        # hammer the server with sub-15s heartbeats.
+        interval = [@heartbeat_interval, 15].max
         @heartbeat_thread = Thread.new do
           Thread.current.report_on_exception = false
           loop do

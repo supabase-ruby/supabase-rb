@@ -7,6 +7,54 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ## [Unreleased]
 
+## [3.1.0] — P1 parity polish (Storage, Functions, Realtime, Meta)
+
+Tightens API parity with `supabase-py` for snippets that copy between
+languages. The auto-prefix on `client.channel(topic)` and the
+`Supabase::Client#schema(name)` immutability are the two visible behavior
+changes; the rest are additive aliases and option support.
+
+### Behavior changes
+
+- **`Realtime::Client#channel(topic)` auto-prefixes `"realtime:"`.**
+  `client.channel("public:users")` and `client.channel("realtime:public:users")`
+  now both reach the same channel. Pre-prefixed topics are detected and left
+  alone.
+- **`Supabase::Client#schema(name)` is immutable.** Returns a scoped
+  `Postgrest::Client` without mutating self — matches supabase-py.
+  Previously the call swapped `@postgrest` in place and returned `self`.
+- **`Realtime::Client` heartbeat clamps to 15s minimum.** Interval values
+  below 15s are treated as 15s in the background loop (matches
+  `supabase-py`'s `max(hb_interval, 15)`). `heartbeat_interval: 0` still
+  disables the loop.
+
+### Added
+
+- **`Storage::FileApi#download(path, transform:)`.** Image transform options
+  route the request through `render/image/authenticated/...`, mirroring
+  `supabase-py`'s `DownloadOptions`.
+- **`Realtime::Channel#on_presence_sync / on_presence_join /
+  on_presence_leave`** and `Channel#presence_state`. Delegates to the
+  underlying `Presence` object; if the channel is already joined when the
+  first presence callback is attached, the channel auto-resubscribes so the
+  server starts emitting presence_state / presence_diff frames.
+- **`config.presence.enabled` is now set to `true`** in the join payload
+  whenever any presence callback is registered on the channel.
+- **`Postgrest::Client#from_` and `Storage::Client#from_`** aliases —
+  pasted-from-py snippets like `postgrest.from_("users")` work as-is.
+- **`Functions::Types::FunctionRegion`** PascalCase aliases (`UsEast1`,
+  `ApSoutheast1`, `EuWest1`, …) alongside the existing `US_EAST_1` constants.
+- **`Realtime::Client#close`** alias for `disconnect`.
+- **`Auth::Types::AMREntry` objects** returned from
+  `mfa.get_authenticator_assurance_level` — was a raw `Hash` array.
+
+### Fixed
+
+- **`Storage::FileApi#upload_to_signed_url`** — `UploadResponse.path` was
+  built from `segments[2..]`, which yielded `"sign/<bucket>/<path>"` for
+  signed uploads instead of just `<path>`. The relative path is now passed
+  explicitly.
+
 ## [3.0.0] — Realtime + Auth parity with supabase-py
 
 **Breaking.** Two Realtime behaviors change shape to match `supabase-py` and
