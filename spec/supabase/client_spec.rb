@@ -305,7 +305,7 @@ RSpec.describe Supabase::Client do
         .to_return(status: 200, body: JSON.generate("greeting" => "hi Ada"),
                    headers: { "Content-Type" => "application/json" })
 
-      r = client.functions.invoke("hello", body: { name: "Ada" })
+      r = client.functions.invoke("hello", body: { name: "Ada" }, response_type: :json)
       expect(r).to eq("greeting" => "hi Ada")
     end
   end

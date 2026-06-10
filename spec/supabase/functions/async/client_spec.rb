@@ -28,7 +28,7 @@ RSpec.describe Supabase::Functions::Async::Client do
     before { WebMock.disable_net_connect! }
     after  { WebMock.allow_net_connect! }
 
-    it "POSTs and returns the parsed JSON body directly" do
+    it "POSTs and returns the parsed JSON body directly when response_type: :json" do
       stub_request(:post, "#{base}/hello")
         .with(body: JSON.generate("name" => "Ada"))
         .to_return(status: 200, body: JSON.generate("greeting" => "hi Ada"),
@@ -36,7 +36,7 @@ RSpec.describe Supabase::Functions::Async::Client do
 
       result = nil
       Async do
-        result = client.invoke("hello", body: { name: "Ada" })
+        result = client.invoke("hello", body: { name: "Ada" }, response_type: :json)
       end.wait
 
       expect(result).to eq("greeting" => "hi Ada")
@@ -70,7 +70,7 @@ RSpec.describe Supabase::Functions::Async::Client do
       results = []
       Async do |task|
         tasks = (0...n).map do |i|
-          task.async { client.invoke("fn#{i}") }
+          task.async { client.invoke("fn#{i}", response_type: :json) }
         end
         results = tasks.map(&:wait)
       end.wait

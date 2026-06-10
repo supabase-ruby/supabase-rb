@@ -17,8 +17,13 @@ module Supabase
     #     headers:  { "Authorization" => "Bearer #{key}" }
     #   )
     #
-    #   data = functions.invoke("hello-world", body: { name: "Ada" })
-    #   # => parsed JSON Hash, raw String, or whatever the function returned.
+    #   raw = functions.invoke("hello-world", body: { name: "Ada" })
+    #   # => raw response body as a String (default — parity with supabase-py).
+    #   data = functions.invoke("hello-world", body: { name: "Ada" }, response_type: :json)
+    #   # => parsed JSON Hash / Array / scalar.
+    #
+    # JSON parsing is opt-in via `response_type: :json` — Content-Type is not
+    # consulted (deliberately different from supabase-js).
     #
     # For the legacy `Types::Response` wrapper (data + status + headers), pass
     # `return_response: true` — note that `Types::Response` is deprecated and
@@ -61,7 +66,10 @@ module Supabase
       # @param headers [Hash] per-invocation headers (merged over the client defaults)
       # @param method [String, Symbol] HTTP method, defaults to "POST"
       # @param region [String, nil] one of {Types::FunctionRegion}::ALL
-      # @param response_type [Symbol, String] :json to parse JSON, anything else returns raw bytes
+      # @param response_type [Symbol, String] :json to parse the response body
+      #   as JSON; anything else (the default) returns the raw response body as
+      #   a String. Matches supabase-py's contract — parsing is opt-in by
+      #   caller, never inferred from the response Content-Type.
       # @param query [Hash, nil] extra query-string params
       # @param return_response [Boolean] when true, return the deprecated
       #   {Types::Response} wrapper (data + status + headers) instead of the
@@ -163,13 +171,12 @@ module Supabase
       def parse_body(response, response_type)
         return response.body if response.body.nil? || response.body.empty?
 
-        if response_type.to_s == "json"
-          parse_json_safe(response.body) || response.body
-        else
-          # Auto-detect JSON: if the server says application/json, parse it.
-          content_type = response.headers["content-type"] || response.headers["Content-Type"] || ""
-          content_type.include?("application/json") ? (parse_json_safe(response.body) || response.body) : response.body
-        end
+        # Parity with supabase-py: JSON is parsed *only* when the caller opts
+        # in via `response_type: :json`. Content-Type is never used to infer
+        # parsing (that's the supabase-js behavior, deliberately not ported).
+        return response.body unless response_type.to_s == "json"
+
+        parse_json_safe(response.body) || response.body
       end
 
       def parse_json_safe(body)

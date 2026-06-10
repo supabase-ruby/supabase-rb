@@ -9,6 +9,17 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ### Changed (breaking)
 
+- **`Supabase::Functions::Client#invoke` no longer auto-parses JSON based
+  on the response `Content-Type` header.** Previously a response with
+  `Content-Type: application/json` was parsed into a Hash/Array
+  automatically; the only way to receive the raw bytes was to use a
+  non-JSON Content-Type. From this release the default is *always* the raw
+  response body (a `String`) — JSON parsing happens **only** when the
+  caller passes `response_type: :json` (or `"json"`). This matches
+  supabase-py's contract; it deliberately diverges from supabase-js, which
+  sniffs Content-Type. **Migration:** add `response_type: :json` at every
+  call site that previously relied on the auto-parse. If you want the raw
+  body, the call is now a no-op change.
 - **`Supabase::Functions::Client#invoke` now returns the parsed body
   directly instead of the `Types::Response` wrapper.** Previously, every
   invocation returned a `Types::Response` struct exposing `data` / `status`

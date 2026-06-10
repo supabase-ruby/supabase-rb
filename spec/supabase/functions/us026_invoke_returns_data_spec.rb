@@ -33,14 +33,14 @@ RSpec.describe Supabase::Functions::Client, "US-026: invoke returns data directl
   # ---------------------------------------------------------------------------
 
   describe "default return shape" do
-    it "returns the parsed JSON Hash directly (not a Types::Response wrapper)" do
+    it "returns the parsed JSON Hash directly (not a Types::Response wrapper) when response_type: :json" do
       allow(Kernel).to receive(:warn) # any leaked Response.new must not pollute stderr
 
       stub_request(:post, "#{base}/hello")
         .to_return(status: 200, body: JSON.generate("greeting" => "hi"),
                    headers: { "Content-Type" => "application/json" })
 
-      result = client.invoke("hello", body: { name: "Ada" })
+      result = client.invoke("hello", body: { name: "Ada" }, response_type: :json)
 
       expect(result).to be_a(Hash)
       expect(result).to eq("greeting" => "hi")
@@ -61,14 +61,14 @@ RSpec.describe Supabase::Functions::Client, "US-026: invoke returns data directl
       expect(result).not_to be_a(Supabase::Functions::Types::Response)
     end
 
-    it "returns an Array directly when the response is a JSON array" do
+    it "returns an Array directly when the response is a JSON array and response_type: :json" do
       allow(Kernel).to receive(:warn)
 
       stub_request(:post, "#{base}/fn")
         .to_return(status: 200, body: JSON.generate([1, 2, 3]),
                    headers: { "Content-Type" => "application/json" })
 
-      result = client.invoke("fn")
+      result = client.invoke("fn", response_type: :json)
 
       expect(result).to eq([1, 2, 3])
     end
@@ -80,7 +80,7 @@ RSpec.describe Supabase::Functions::Client, "US-026: invoke returns data directl
 
       expect(Kernel).not_to receive(:warn)
 
-      client.invoke("fn")
+      client.invoke("fn", response_type: :json)
       expect(Supabase::Functions::Types::Response._deprecation_warned).to be_falsey
     end
   end
@@ -97,7 +97,7 @@ RSpec.describe Supabase::Functions::Client, "US-026: invoke returns data directl
         .to_return(status: 201, body: JSON.generate("ok" => true),
                    headers: { "Content-Type" => "application/json", "X-Trace-Id" => "abc" })
 
-      result = client.invoke("fn", return_response: true)
+      result = client.invoke("fn", return_response: true, response_type: :json)
 
       expect(result).to be_a(Supabase::Functions::Types::Response)
       expect(result.data).to eq("ok" => true)

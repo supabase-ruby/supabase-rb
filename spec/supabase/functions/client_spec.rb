@@ -61,7 +61,7 @@ RSpec.describe Supabase::Functions::Client do
         .to_return(status: 200, body: JSON.generate("ok" => true),
                    headers: { "Content-Type" => "application/json" })
 
-      r = client.invoke("hello", body: { name: "Ada" })
+      r = client.invoke("hello", body: { name: "Ada" }, response_type: :json)
       expect(r).to eq("ok" => true)
       expect(r).not_to be_a(Supabase::Functions::Types::Response)
     end
@@ -163,7 +163,7 @@ RSpec.describe Supabase::Functions::Client do
   # ---------------------------------------------------------------------------
 
   describe "response parsing" do
-    it "auto-parses JSON when the response Content-Type says application/json" do
+    it "returns the raw body String even when the Content-Type is application/json (no auto-parse)" do
       stub_request(:post, "#{base}/fn").to_return(
         status:  200,
         body:    JSON.generate("ok" => true),
@@ -171,7 +171,8 @@ RSpec.describe Supabase::Functions::Client do
       )
 
       r = client.invoke("fn")
-      expect(r).to eq("ok" => true)
+      expect(r).to be_a(String)
+      expect(r).to eq(JSON.generate("ok" => true))
     end
 
     it "returns the raw body when the Content-Type is not JSON (text/plain, etc.)" do
@@ -185,7 +186,7 @@ RSpec.describe Supabase::Functions::Client do
       expect(r).to eq("hello world")
     end
 
-    it "forces JSON parsing when response_type: :json is given (regardless of Content-Type)" do
+    it "parses JSON when response_type: :json is given (regardless of Content-Type)" do
       stub_request(:post, "#{base}/fn").to_return(
         status:  200,
         body:    JSON.generate(42),

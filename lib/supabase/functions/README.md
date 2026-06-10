@@ -27,10 +27,14 @@ functions = Supabase::Functions::Client.new(
 )
 
 # Simple invoke (POST + JSON body)
-data = functions.invoke("hello", body: { name: "Ada" })
-# => parsed JSON Hash (or raw String / Array / nil, depending on the function's
-#    Content-Type). For the legacy wrapper carrying status + headers, pass
-#    `return_response: true` — note: that path is deprecated.
+raw = functions.invoke("hello", body: { name: "Ada" })
+# => the raw response body as a String (default). Parsing is opt-in:
+
+data = functions.invoke("hello", body: { name: "Ada" }, response_type: :json)
+# => parsed JSON (Hash / Array / scalar). Same shape as supabase-py.
+
+# For the legacy wrapper carrying status + headers, pass
+# `return_response: true` — note: that path is deprecated.
 ```
 
 ### Custom method / headers / query / region
@@ -46,8 +50,9 @@ functions.invoke(
 )
 ```
 
-The return value is auto-parsed when the response `Content-Type` is JSON,
-otherwise it's the raw body. Force parsing with `response_type: :json`.
+The return value is the raw response body unless you opt in with
+`response_type: :json` — Content-Type is intentionally ignored (parity with
+supabase-py, deliberately different from supabase-js).
 
 ### Errors
 
