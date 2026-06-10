@@ -7,6 +7,55 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ## [Unreleased]
 
+## [3.1.1] — Remaining P1 + MISSING parity gaps
+
+Wraps up the remaining items from the supabase-py audit. All additions
+are backwards-compatible; only new public APIs and a URL validation on
+`Realtime::Client.new`.
+
+### Added
+
+- **`Postgrest::Client#auth(token, username:, password:)`.** Bearer or
+  Basic auth on the same method; Bearer wins when both supplied. Raises
+  `ArgumentError` if neither is provided. Mirrors supabase-py.
+- **`Postgrest::Client#close` + `Postgrest::Client.open(...) { |c| ... }`.**
+  `close` releases the memoized Faraday connection; the block form
+  yields and closes — moral equivalent of py's `with SyncPostgrestClient(...)`.
+- **`Realtime::Channel#push_event(event, payload, timeout:)`** — public
+  low-level push for arbitrary Phoenix events. Returns the `Push`
+  instance so callers can attach `receive(:ok / :error / :timeout)`.
+  (Named `push_event` to avoid shadowing the existing private `send_push`.)
+- **`Realtime::Errors::NotConnectedError`** and
+  **`Realtime::Errors::AuthorizationError`** — both were referenced from
+  the meta-level `Supabase::AuthorizationError` / `Supabase::NotConnectedError`
+  aliases but never actually defined. Now the aliases resolve.
+- **`Realtime::Transformers.is_ws_url`** and URL scheme validation in
+  `Realtime::Client.new` (accepts ws/wss/http/https, raises
+  `ArgumentError` otherwise).
+- **`Storage::Types::SignedUploadURL#signedURL`** alias (all-caps URL,
+  matching supabase-py's TypedDict key) alongside the existing
+  `signed_url` / `signedUrl`.
+- **`Supabase::Client.create(supabase_url:, supabase_key:, options:)`**
+  class method. Builds the client, then — if no explicit `Authorization`
+  was passed via `options` — tries to pull a persisted session from
+  `client.auth.get_session` and applies its `access_token`. Errors
+  during pull are swallowed silently. Mirrors supabase-py's
+  `Client.create()`.
+- **Auto `on_auth_state_change` listener on `Supabase::Client#auth`.**
+  When the auth client emits `SIGNED_IN` / `TOKEN_REFRESHED` /
+  `SIGNED_OUT`, the meta client now forwards the new token to every
+  other sub-client (Postgrest, Storage, Functions, Realtime) via
+  `propagate_auth(token)`. Matches py's `_listen_to_auth_events`.
+- **`Auth::Client#bootstrap`** alias for `init(url:)`.
+
+### Fixed
+
+- **`Auth::Client#_save_session`** now serializes the entire `Session`
+  struct recursively (Time/Date → iso8601, nested Structs walked)
+  instead of cherry-picking allow-listed fields. Custom upstream fields
+  on `User` / `Identity` / `Factor` now round-trip through storage
+  without being silently dropped. Mirrors py's `model_dump_json()`.
+
 ## [3.1.0] — P1 parity polish (Storage, Functions, Realtime, Meta)
 
 Tightens API parity with `supabase-py` for snippets that copy between
