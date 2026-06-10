@@ -133,6 +133,36 @@ RSpec.describe Supabase::Client do
       expect(builder.request.path).to eq("/rest/v1/users")
     end
 
+    # supabase-py exposes `client.table(name)` as an alias of `client.from_(name)`
+    # (`supabase/_sync/client.py:128`). Without this alias, code ported from
+    # Python that uses `client.table("users")` would NoMethodError.
+    describe "#table — supabase-py parity alias" do
+      it "returns the same builder shape as #from for the same table" do
+        from_builder  = client.from("users").select("*")
+        table_builder = client.table("users").select("*")
+
+        expect(table_builder).to be_a(from_builder.class)
+        expect(table_builder.request.path).to eq(from_builder.request.path)
+      end
+
+      it "behaves identically end-to-end (select * → execute returns data)" do
+        WebMock.disable_net_connect!
+        begin
+          stub_request(:get, %r{#{Regexp.escape(project_url)}/rest/v1/users(\?.*)?})
+            .with(headers: { "apikey" => key, "Authorization" => "Bearer #{key}" })
+            .to_return(status: 200, body: JSON.generate([{ "id" => 1 }]))
+
+          from_resp  = client.from("users").select("*").execute
+          table_resp = client.table("users").select("*").execute
+
+          expect(table_resp.data).to eq(from_resp.data)
+          expect(table_resp.data).to eq([{ "id" => 1 }])
+        ensure
+          WebMock.allow_net_connect!
+        end
+      end
+    end
+
     it "#rpc(name, params) delegates to postgrest.rpc" do
       rpc = client.rpc("inc_by", { x: 1 })
       expect(rpc.request.http_method).to eq("POST")

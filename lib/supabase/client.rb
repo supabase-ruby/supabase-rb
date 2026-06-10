@@ -162,6 +162,12 @@ module Supabase
       postgrest.from(table)
     end
 
+    # Alias for {#from}. Mirrors supabase-py's `Client.table(table_name)` so
+    # code ported from Python (`client.table("users").select("*")`) works
+    # unchanged.
+    # @see supabase-py supabase/_sync/client.py:128
+    alias table from
+
     def rpc(func, params = {}, **opts)
       postgrest.rpc(func, params, **opts)
     end
