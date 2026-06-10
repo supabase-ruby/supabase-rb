@@ -17,10 +17,12 @@ module Supabase
     #     headers:  { "Authorization" => "Bearer #{key}" }
     #   )
     #
-    #   response = functions.invoke("hello-world", body: { name: "Ada" })
-    #   response.data    # => parsed JSON or raw bytes
-    #   response.status  # => 200
-    #   response.headers # => { "content-type" => "application/json", ... }
+    #   data = functions.invoke("hello-world", body: { name: "Ada" })
+    #   # => parsed JSON Hash, raw String, or whatever the function returned.
+    #
+    # For the legacy `Types::Response` wrapper (data + status + headers), pass
+    # `return_response: true` — note that `Types::Response` is deprecated and
+    # will be removed in a future release.
     class Client
       VALID_METHODS = %w[GET OPTIONS HEAD POST PUT PATCH DELETE].freeze
 
@@ -61,8 +63,15 @@ module Supabase
       # @param region [String, nil] one of {Types::FunctionRegion}::ALL
       # @param response_type [Symbol, String] :json to parse JSON, anything else returns raw bytes
       # @param query [Hash, nil] extra query-string params
-      # @return [Types::Response]
-      def invoke(function_name, body: nil, headers: {}, method: "POST", region: nil, response_type: :text, query: nil)
+      # @param return_response [Boolean] when true, return the deprecated
+      #   {Types::Response} wrapper (data + status + headers) instead of the
+      #   bare parsed body. Default `false` (US-026). The wrapper is scheduled
+      #   for removal — prefer reading the data directly.
+      # @return [Object, Types::Response] parsed body (Hash / String / Array /
+      #   nil) by default; the deprecated `Types::Response` struct when
+      #   `return_response: true` is passed.
+      def invoke(function_name, body: nil, headers: {}, method: "POST", region: nil, response_type: :text,
+                 query: nil, return_response: false)
         validate_function_name!(function_name)
 
         http_method = method.to_s.upcase
@@ -104,11 +113,10 @@ module Supabase
         raise_for_relay!(response)
         raise_for_status!(response)
 
-        Types::Response.new(
-          data:    parse_body(response, response_type),
-          status:  response.status,
-          headers: response.headers
-        )
+        data = parse_body(response, response_type)
+        return data unless return_response
+
+        Types::Response.new(data: data, status: response.status, headers: response.headers)
       end
 
       private

@@ -27,10 +27,10 @@ functions = Supabase::Functions::Client.new(
 )
 
 # Simple invoke (POST + JSON body)
-response = functions.invoke("hello", body: { name: "Ada" })
-response.data    # => parsed JSON or raw bytes
-response.status
-response.headers
+data = functions.invoke("hello", body: { name: "Ada" })
+# => parsed JSON Hash (or raw String / Array / nil, depending on the function's
+#    Content-Type). For the legacy wrapper carrying status + headers, pass
+#    `return_response: true` — note: that path is deprecated.
 ```
 
 ### Custom method / headers / query / region
@@ -46,8 +46,8 @@ functions.invoke(
 )
 ```
 
-`response.data` is auto-parsed when the response `Content-Type` is JSON,
-otherwise the raw body. Force parsing with `response_type: :json`.
+The return value is auto-parsed when the response `Content-Type` is JSON,
+otherwise it's the raw body. Force parsing with `response_type: :json`.
 
 ### Errors
 
@@ -66,6 +66,6 @@ async = Supabase::Functions::Async::Client.new(
 )
 
 Async do
-  response = async.invoke("hello", body: { name: "Ada" })
+  data = async.invoke("hello", body: { name: "Ada" })
 end
 ```

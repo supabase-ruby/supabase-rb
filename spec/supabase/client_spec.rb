@@ -306,7 +306,7 @@ RSpec.describe Supabase::Client do
                    headers: { "Content-Type" => "application/json" })
 
       r = client.functions.invoke("hello", body: { name: "Ada" })
-      expect(r.data).to eq("greeting" => "hi Ada")
+      expect(r).to eq("greeting" => "hi Ada")
     end
   end
 end

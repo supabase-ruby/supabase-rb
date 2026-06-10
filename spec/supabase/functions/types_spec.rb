@@ -4,6 +4,8 @@ require "supabase/functions"
 
 RSpec.describe Supabase::Functions::Types do
   describe described_class::Response do
+    before { allow(Kernel).to receive(:warn) } # silence US-026 deprecation warning
+
     it "is a Struct exposing data / status / headers" do
       r = described_class.new(data: { "ok" => true }, status: 200, headers: { "x" => "y" })
       expect(r.data).to eq("ok" => true)

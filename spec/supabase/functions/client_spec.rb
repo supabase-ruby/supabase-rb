@@ -62,9 +62,8 @@ RSpec.describe Supabase::Functions::Client do
                    headers: { "Content-Type" => "application/json" })
 
       r = client.invoke("hello", body: { name: "Ada" })
-      expect(r).to be_a(Supabase::Functions::Types::Response)
-      expect(r.status).to eq(200)
-      expect(r.data).to eq("ok" => true)
+      expect(r).to eq("ok" => true)
+      expect(r).not_to be_a(Supabase::Functions::Types::Response)
     end
 
     it "sends a String body as text/plain without JSON-encoding it" do
@@ -172,7 +171,7 @@ RSpec.describe Supabase::Functions::Client do
       )
 
       r = client.invoke("fn")
-      expect(r.data).to eq("ok" => true)
+      expect(r).to eq("ok" => true)
     end
 
     it "returns the raw body when the Content-Type is not JSON (text/plain, etc.)" do
@@ -183,7 +182,7 @@ RSpec.describe Supabase::Functions::Client do
       )
 
       r = client.invoke("fn")
-      expect(r.data).to eq("hello world")
+      expect(r).to eq("hello world")
     end
 
     it "forces JSON parsing when response_type: :json is given (regardless of Content-Type)" do
@@ -194,17 +193,19 @@ RSpec.describe Supabase::Functions::Client do
       )
 
       r = client.invoke("fn", response_type: :json)
-      expect(r.data).to eq(42)
+      expect(r).to eq(42)
     end
 
-    it "exposes the response status and headers on the Response struct" do
+    it "exposes the response status and headers on the Response struct when return_response: true" do
+      allow(Kernel).to receive(:warn) # silence Types::Response deprecation warning
       stub_request(:post, "#{base}/fn").to_return(
         status:  201,
         body:    "",
         headers: { "X-Trace-Id" => "abc" }
       )
 
-      r = client.invoke("fn")
+      r = client.invoke("fn", return_response: true)
+      expect(r).to be_a(Supabase::Functions::Types::Response)
       expect(r.status).to eq(201)
       expect(r.headers["x-trace-id"]).to eq("abc")
     end

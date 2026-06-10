@@ -28,7 +28,7 @@ RSpec.describe Supabase::Functions::Async::Client do
     before { WebMock.disable_net_connect! }
     after  { WebMock.allow_net_connect! }
 
-    it "POSTs and returns a parsed JSON Response struct" do
+    it "POSTs and returns the parsed JSON body directly" do
       stub_request(:post, "#{base}/hello")
         .with(body: JSON.generate("name" => "Ada"))
         .to_return(status: 200, body: JSON.generate("greeting" => "hi Ada"),
@@ -39,8 +39,7 @@ RSpec.describe Supabase::Functions::Async::Client do
         result = client.invoke("hello", body: { name: "Ada" })
       end.wait
 
-      expect(result.status).to eq(200)
-      expect(result.data).to eq("greeting" => "hi Ada")
+      expect(result).to eq("greeting" => "hi Ada")
     end
 
     it "raises FunctionsHttpError through the fiber boundary on a 5xx" do
@@ -59,7 +58,7 @@ RSpec.describe Supabase::Functions::Async::Client do
     before { WebMock.disable_net_connect! }
     after  { WebMock.allow_net_connect! }
 
-    it "fans out N parallel invokes and collects N independent Response structs" do
+    it "fans out N parallel invokes and collects N independent parsed bodies" do
       n = 5
       n.times do |i|
         stub_request(:post, "#{base}/fn#{i}").to_return(
@@ -77,7 +76,7 @@ RSpec.describe Supabase::Functions::Async::Client do
       end.wait
 
       expect(results.length).to eq(n)
-      expect(results.map { |r| r.data["idx"] }).to contain_exactly(0, 1, 2, 3, 4)
+      expect(results.map { |r| r["idx"] }).to contain_exactly(0, 1, 2, 3, 4)
     end
   end
 end

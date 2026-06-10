@@ -9,6 +9,19 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ### Changed (breaking)
 
+- **`Supabase::Functions::Client#invoke` now returns the parsed body
+  directly instead of the `Types::Response` wrapper.** Previously, every
+  invocation returned a `Types::Response` struct exposing `data` / `status`
+  / `headers`; callers had to write `client.functions.invoke("hello").data`
+  to reach the payload, diverging from supabase-py
+  (`client.functions.invoke("hello")` returns the body). From this release
+  the bare body — `Hash` / `String` / `Array` / `nil` depending on the
+  Content-Type — is the default return value. **Migration:** drop the
+  trailing `.data`, or pass `return_response: true` to opt back into the
+  legacy wrapper for one more release. `Types::Response` itself is now
+  deprecated and emits a one-time `Kernel.warn` on first construction
+  (whether built directly or via `return_response: true`); it will be
+  removed in a future release.
 - **`Supabase::Auth::Client#sign_up` now requires `password` when either
   `email` or `phone` is supplied.** Previously, calling
   `sign_up(email: "x@y.z")` without a password silently posted

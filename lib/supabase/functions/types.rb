@@ -3,9 +3,30 @@
 module Supabase
   module Functions
     module Types
-      # Returned by Client#invoke. `data` is parsed JSON when response_type: :json
-      # (or auto-detected from a JSON Content-Type), otherwise the raw response body.
-      Response = Struct.new(:data, :status, :headers, keyword_init: true)
+      # @deprecated US-026: `Client#invoke` now returns parsed body directly.
+      #   Pass `return_response: true` to {Supabase::Functions::Client#invoke}
+      #   to keep building this wrapper temporarily — both paths emit a
+      #   one-time deprecation warning. Slated for removal in a future
+      #   release. Read `data` directly from `invoke`'s return value instead.
+      class Response < Struct.new(:data, :status, :headers, keyword_init: true)
+        DEPRECATION_MESSAGE =
+          "[DEPRECATION] Supabase::Functions::Types::Response is deprecated " \
+          "(US-026): Supabase::Functions::Client#invoke now returns the parsed " \
+          "body directly. Pass `return_response: true` only as a temporary " \
+          "compatibility shim — this struct will be removed in a future release."
+
+        class << self
+          attr_accessor :_deprecation_warned
+        end
+
+        def self.new(*args, **kwargs)
+          unless _deprecation_warned
+            Kernel.warn(DEPRECATION_MESSAGE)
+            self._deprecation_warned = true
+          end
+          super
+        end
+      end
 
       # Supabase Edge Function regions. Use FunctionRegion::US_EAST_1 etc., or pass
       # the bare string ("us-east-1") to Client#invoke — both are accepted.
