@@ -346,11 +346,20 @@ module Supabase
         change_type = data["type"]
         schema      = data["schema"]
         table       = data["table"]
+        ids         = message.payload["ids"]
 
         @postgres_changes_callbacks.each do |binding|
           next unless binding[:event] == change_type || binding[:event] == "*"
           next if binding[:schema] && binding[:schema] != schema
           next if binding[:table]  && binding[:table]  != table
+          # Server-side binding-id routing: once on_join_ok has recorded the
+          # server-assigned :id, an inbound frame's payload.ids tells us which
+          # bindings the server intended to fire. This is how two bindings on
+          # the same (schema, table) but different :filter get demultiplexed —
+          # without it both would fire on every change. Before the join-ack
+          # (no :id yet) we fall through and the legacy event/schema/table
+          # filtering remains the sole gate.
+          next if binding[:id] && ids.is_a?(Array) && !ids.include?(binding[:id])
 
           binding[:callback].call(message.payload)
         end
