@@ -10,5 +10,6 @@
 require_relative "../auth"
 require_relative "async/api"
 require_relative "async/admin_oauth_api"
+require_relative "async/admin_mfa_api"
 require_relative "async/admin_api"
 require_relative "async/client"

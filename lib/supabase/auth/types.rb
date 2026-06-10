@@ -368,11 +368,20 @@ module Supabase
         :factors,
         keyword_init: true
       ) do
-        def self.from_hash(hash)
-          return nil if hash.nil?
+        # Accepts both forms:
+        #   - bare Array of factor hashes (supabase-py / current GoTrue response)
+        #   - `{"factors" => [...]}` wrapped Hash (legacy)
+        def self.from_hash(data)
+          return nil if data.nil?
 
-          factors = (hash["factors"] || hash[:factors] || []).map { |f| Factor.from_hash(f) }
-          new(factors: factors)
+          raw_factors = if data.is_a?(Array)
+                         data
+                       elsif data.is_a?(Hash)
+                         data["factors"] || data[:factors] || []
+                       else
+                         []
+                       end
+          new(factors: raw_factors.map { |f| Factor.from_hash(f) })
         end
       end
 

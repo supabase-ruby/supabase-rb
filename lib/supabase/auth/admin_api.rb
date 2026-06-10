@@ -10,6 +10,9 @@ module Supabase
       # @return [AdminOAuthApi] OAuth 2.1 client administration accessor
       attr_reader :oauth
 
+      # @return [AdminMfaApi] MFA administration accessor
+      attr_reader :mfa
+
       # @param url [String] The GoTrue API base URL
       # @param headers [Hash] Headers including Authorization bearer token
       # @param http_client [Faraday::Connection, nil] Optional custom Faraday client
@@ -19,6 +22,7 @@ module Supabase
       def initialize(url:, headers: {}, http_client: nil, verify: true, proxy: nil, timeout: nil)
         super(url: url, headers: headers, http_client: http_client, verify: verify, proxy: proxy, timeout: timeout)
         @oauth = AdminOAuthApi.new(self)
+        @mfa = AdminMfaApi.new(self)
       end
 
       # Creates a new user via the admin API.

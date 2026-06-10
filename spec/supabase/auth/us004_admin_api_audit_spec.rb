@@ -632,7 +632,9 @@ RSpec.describe "US-004: Admin API Methods Audit" do
 
     describe "_list_factors" do
       # Python: self._request("GET", f"admin/users/{params.get('user_id')}/factors", ...)
-      it "sends GET to /admin/users/{user_id}/factors" do
+      # US-022: GoTrue now returns a bare JSON array; legacy `{"factors": [...]}` form
+      # is still accepted by AuthMFAAdminListFactorsResponse.from_hash for back-compat.
+      it "sends GET to /admin/users/{user_id}/factors (legacy wrapped form)" do
         stub = stub_request(:get, "#{base_url}/admin/users/#{test_uuid}/factors")
           .to_return(
             status: 200,
@@ -643,6 +645,22 @@ RSpec.describe "US-004: Admin API Methods Audit" do
         result = admin_api._list_factors(user_id: test_uuid)
         expect(stub).to have_been_requested
         expect(result).to be_a(Supabase::Auth::Types::AuthMFAAdminListFactorsResponse)
+        expect(result.factors.size).to eq(1)
+      end
+
+      it "parses a bare JSON-array response (US-022, py parity)" do
+        stub = stub_request(:get, "#{base_url}/admin/users/#{test_uuid}/factors")
+          .to_return(
+            status: 200,
+            body: mock_factors.to_json,
+            headers: { "Content-Type" => "application/json" }
+          )
+
+        result = admin_api._list_factors(user_id: test_uuid)
+        expect(stub).to have_been_requested
+        expect(result).to be_a(Supabase::Auth::Types::AuthMFAAdminListFactorsResponse)
+        expect(result.factors.size).to eq(1)
+        expect(result.factors.first.id).to eq(test_factor_id)
       end
 
       it "validates user_id UUID" do
