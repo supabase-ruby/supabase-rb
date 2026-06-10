@@ -9,6 +9,21 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ### Changed (breaking)
 
+- **`Supabase::Functions::Client#invoke` no longer accepts the `method:` or
+  `query:` kwargs.** Both existed only to mirror the supabase-js surface
+  and had no counterpart in supabase-py — keeping them was a long-running
+  source of JS-vs-Py drift in the Ruby client (US-030 / F-C11 part 5).
+  Calling `invoke(name, method: "GET")` or `invoke(name, query: {...})`
+  now raises `ArgumentError: unknown keyword: :method` (or `:query`) at
+  the Ruby kwargs layer — no silent ignore. The method is always `POST`.
+  Region routing still appends `forceFunctionRegion=<region>` to the
+  query string internally; that path is unchanged. **Migration:**
+  - If you were passing `method:` for anything other than the
+    pre-existing default `"POST"`, those calls were never going to reach
+    a real Edge Function endpoint anyway (Supabase Edge Functions are
+    POST-only on the relay side) — remove the kwarg.
+  - If you were passing `query:` to attach a query string, append it to
+    the function name yourself: `invoke("fn?tenant=x", ...)`.
 - **`Supabase::Functions::Client#invoke` no longer auto-parses JSON based
   on the response `Content-Type` header.** Previously a response with
   `Content-Type: application/json` was parsed into a Hash/Array

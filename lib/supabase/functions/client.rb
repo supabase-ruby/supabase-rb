@@ -29,8 +29,6 @@ module Supabase
     # `return_response: true` — note that `Types::Response` is deprecated and
     # will be removed in a future release.
     class Client
-      VALID_METHODS = %w[GET OPTIONS HEAD POST PUT PATCH DELETE].freeze
-
       attr_reader :base_url, :headers
 
       # @param base_url [String] full URL to the Edge Functions endpoint
@@ -61,16 +59,19 @@ module Supabase
 
       # Invoke an Edge Function by name.
       #
+      # Always POSTs. The `method:` and `query:` kwargs were dropped in US-030
+      # — they had no analogue in supabase-py and only existed to mirror the
+      # supabase-js surface (see Open Question §9.4). Region routing still
+      # appends `forceFunctionRegion` to the URL via the region branch below.
+      #
       # @param function_name [String]
       # @param body [Hash, String, nil] JSON-encoded if Hash, sent as-is if String
       # @param headers [Hash] per-invocation headers (merged over the client defaults)
-      # @param method [String, Symbol] HTTP method, defaults to "POST"
       # @param region [String, nil] one of {Types::FunctionRegion}::ALL
       # @param response_type [Symbol, String] :json to parse the response body
       #   as JSON; anything else (the default) returns the raw response body as
       #   a String. Matches supabase-py's contract — parsing is opt-in by
       #   caller, never inferred from the response Content-Type.
-      # @param query [Hash, nil] extra query-string params
       # @param return_response [Boolean] when true, return the deprecated
       #   {Types::Response} wrapper (data + status + headers) instead of the
       #   bare parsed body. Default `false` (US-026). The wrapper is scheduled
@@ -78,18 +79,13 @@ module Supabase
       # @return [Object, Types::Response] parsed body (Hash / String / Array /
       #   nil) by default; the deprecated `Types::Response` struct when
       #   `return_response: true` is passed.
-      def invoke(function_name, body: nil, headers: {}, method: "POST", region: nil, response_type: :text,
-                 query: nil, return_response: false)
+      def invoke(function_name, body: nil, headers: {}, region: nil, response_type: :text,
+                 return_response: false)
         validate_function_name!(function_name)
         validate_region!(region)
 
-        http_method = method.to_s.upcase
-        unless VALID_METHODS.include?(http_method)
-          raise ArgumentError, "method must be one of #{VALID_METHODS.join(', ')}"
-        end
-
         merged_headers = @headers.merge(headers)
-        merged_query   = (query || {}).transform_keys(&:to_s)
+        merged_query   = {}
 
         if region && region != Types::FunctionRegion::ANY
           merged_headers["x-region"] = region
@@ -111,7 +107,7 @@ module Supabase
           end
 
         response = @session.run_request(
-          http_method.downcase.to_sym,
+          :post,
           "#{@base_url}/#{function_name}",
           encoded_body,
           merged_headers

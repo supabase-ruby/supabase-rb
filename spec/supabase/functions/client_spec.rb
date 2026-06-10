@@ -50,7 +50,7 @@ RSpec.describe Supabase::Functions::Client do
   end
 
   # ---------------------------------------------------------------------------
-  # Invoke — body / headers / method
+  # Invoke — body / headers
   # ---------------------------------------------------------------------------
 
   describe "#invoke" do
@@ -75,12 +75,12 @@ RSpec.describe Supabase::Functions::Client do
       client.invoke("hello", body: "raw payload")
     end
 
-    it "doesn't add a Content-Type when the body is nil (GET-style invocations)" do
-      stub = stub_request(:get, "#{base}/ping")
+    it "doesn't add a Content-Type when the body is nil" do
+      stub = stub_request(:post, "#{base}/ping")
              .with { |req| !req.headers.key?("Content-Type") || req.headers["Content-Type"] != "application/json" }
              .to_return(status: 200, body: "")
 
-      client.invoke("ping", method: "GET")
+      client.invoke("ping")
       expect(stub).to have_been_requested
     end
 
@@ -92,18 +92,6 @@ RSpec.describe Supabase::Functions::Client do
       client.invoke("hello", headers: { "X-Custom" => "header" })
     end
 
-    it "honors the method: parameter for PUT/PATCH/DELETE/HEAD/OPTIONS" do
-      %w[PUT PATCH DELETE HEAD OPTIONS].each do |m|
-        stub_request(m.downcase.to_sym, "#{base}/fn").to_return(status: 200, body: "")
-        client.invoke("fn", method: m)
-      end
-    end
-
-    it "rejects unknown HTTP methods" do
-      expect { client.invoke("fn", method: "FOO") }
-        .to raise_error(ArgumentError, /method/)
-    end
-
     it "rejects blank function names" do
       expect { client.invoke("") }.to raise_error(ArgumentError, /function_name/)
       expect { client.invoke("   ") }.to raise_error(ArgumentError, /function_name/)
@@ -113,14 +101,6 @@ RSpec.describe Supabase::Functions::Client do
     it "rejects body types that aren't String / Hash / Array / nil" do
       expect { client.invoke("fn", body: 42) }
         .to raise_error(ArgumentError, /body must be/)
-    end
-
-    it "passes query: as the query string" do
-      stub_request(:post, "#{base}/fn")
-        .with(query: { "a" => "1", "b" => "2" })
-        .to_return(status: 200, body: "")
-
-      client.invoke("fn", query: { a: 1, b: "2" })
     end
   end
 

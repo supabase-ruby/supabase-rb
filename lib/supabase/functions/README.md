@@ -1,8 +1,8 @@
 # `supabase-functions`
 
 Ruby client for [Supabase Edge Functions](https://supabase.com/docs/guides/functions).
-Per-call control over body, headers, HTTP method, region routing, and
-response parsing. Mirrors the public surface of
+Per-call control over body, headers, region routing, and response parsing.
+Mirrors the public surface of
 [`supabase_functions`](https://github.com/supabase/supabase-py/tree/main/src/functions)
 in Python.
 
@@ -37,18 +37,22 @@ data = functions.invoke("hello", body: { name: "Ada" }, response_type: :json)
 # `return_response: true` — note: that path is deprecated.
 ```
 
-### Custom method / headers / query / region
+### Custom headers / region
 
 ```ruby
 functions.invoke(
   "ingest",
-  method:  "PUT",
   headers: { "X-Trace-Id" => "abc" },
-  query:   { tenant: "x" },
   region:  Supabase::Functions::Types::FunctionRegion::US_EAST_1,
   body:    payload_hash
 )
 ```
+
+`#invoke` is always a POST — there is no `method:` kwarg. There is no
+`query:` kwarg either (the only query-string consumer is region routing,
+which is wired up internally). Both kwargs existed historically to mirror
+the supabase-js surface and were dropped in US-030 for parity with
+supabase-py.
 
 The return value is the raw response body unless you opt in with
 `response_type: :json` — Content-Type is intentionally ignored (parity with
