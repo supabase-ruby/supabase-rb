@@ -103,8 +103,7 @@ module Supabase
       @auth.on_auth_state_change do |event, session|
         next unless %w[SIGNED_IN TOKEN_REFRESHED SIGNED_OUT].include?(event)
 
-        token = session&.access_token || @supabase_key
-        propagate_auth(token)
+        apply_auth(session&.access_token)
       end
       @auth
     end
@@ -155,28 +154,26 @@ module Supabase
     # Update the Authorization header used by every sub-client. Useful after
     # auth.sign_in returns a fresh JWT — the apikey stays the same but the
     # bearer token becomes the user's access token.
+    #
+    # Breaking change vs <=3.1.1: `set_auth(nil)` no longer drops the memoized
+    # auth sub-client (and with it any persisted session). Call `auth.sign_out`
+    # to clear session state.
     def set_auth(token)
-      @headers["Authorization"] = "Bearer #{token || @supabase_key}"
-      # Reset memoized sub-clients so they pick up the new header on next access.
-      # Realtime gets its own pathway (set_auth pushes access_token frames).
-      @auth      = nil
-      @storage   = nil
-      @functions = nil
-      @postgrest = nil
-      @realtime&.set_auth(token)
+      apply_auth(token)
       self
     end
 
     private
 
-    # Refresh the Authorization header (used by every sub-client other than
-    # auth itself, which manages its own headers) and reset the memoized
-    # sub-clients so they pick up the new token on next access.
-    def propagate_auth(token)
-      @headers["Authorization"] = "Bearer #{token}"
-      @storage   = nil
-      @functions = nil
-      @postgrest = nil
+    # Single internal path shared by the public `#set_auth` and the
+    # `on_auth_state_change` listener installed on `#auth`. Refreshes the
+    # Authorization header used by every non-auth sub-client and resets their
+    # memoized instances so they pick up the new token on next access.
+    # `@auth` is intentionally preserved — clearing it would also discard the
+    # in-memory persisted session held by its storage backend.
+    def apply_auth(token)
+      @headers["Authorization"] = "Bearer #{token || @supabase_key}"
+      @storage = @functions = @postgrest = nil
       @realtime&.set_auth(token)
     end
 

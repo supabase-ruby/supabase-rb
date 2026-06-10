@@ -159,15 +159,42 @@ RSpec.describe Supabase::Client do
     end
 
     it "resets the memoized HTTP sub-clients so they pick up the new header" do
+      first_postgrest = client.postgrest
+      first_storage   = client.storage
+      first_functions = client.functions
+      client.set_auth("user-jwt")
+      expect(client.postgrest).not_to be(first_postgrest)
+      expect(client.storage).not_to   be(first_storage)
+      expect(client.functions).not_to be(first_functions)
+    end
+
+    it "preserves the memoized auth sub-client (the persisted session lives there)" do
       first_auth = client.auth
       client.set_auth("user-jwt")
-      expect(client.auth).not_to be(first_auth)
+      expect(client.auth).to be(first_auth)
     end
 
     it "falls back to the original anon key when set_auth(nil) is called (sign-out)" do
       client.set_auth("user-jwt")
       client.set_auth(nil)
       expect(client.headers["Authorization"]).to eq("Bearer #{key}")
+    end
+
+    it "leaves a persisted auth session intact so client.auth.get_session still returns it" do
+      session = Supabase::Auth::Types::Session.new(
+        access_token:  "stored-access-token",
+        refresh_token: "stored-refresh-token",
+        token_type:    "bearer",
+        expires_in:    3600,
+        expires_at:    Time.now.to_i + 3600,
+        user:          nil
+      )
+      client.auth.send(:_save_session, session)
+      expect(client.auth.get_session&.access_token).to eq("stored-access-token")
+
+      client.set_auth("user-jwt")
+
+      expect(client.auth.get_session&.access_token).to eq("stored-access-token")
     end
   end
 

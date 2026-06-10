@@ -7,6 +7,22 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ## [Unreleased]
 
+### Changed (breaking)
+
+- **`Supabase::Client#set_auth` no longer resets the memoized `auth`
+  sub-client.** Previously, calling `set_auth(token)` (or
+  `set_auth(nil)` for sign-out) nilled `@auth` alongside the other
+  sub-clients, which silently discarded the in-memory persisted session
+  held by the auth client's storage backend — so `client.auth.get_session`
+  began returning `nil` after any token swap. From this release,
+  `set_auth` only rewrites the shared `Authorization` header and resets
+  the Postgrest/Storage/Functions sub-clients (Realtime still receives
+  `set_auth(token)`). To clear auth state on sign-out, call
+  `client.auth.sign_out` — `set_auth(nil)` is no longer a sign-out
+  shortcut. The public `set_auth` and the previously-private
+  `propagate_auth` (used by the `on_auth_state_change` listener) now
+  share a single internal path.
+
 ## [3.1.1] — Remaining P1 + MISSING parity gaps
 
 Wraps up the remaining items from the supabase-py audit. All additions
