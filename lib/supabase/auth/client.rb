@@ -383,14 +383,12 @@ module Supabase
       # @option options [String] :scope ("global") sign-out scope: "global", "local", or "others"
       def sign_out(options = {})
         scope = options[:scope] || options["scope"] || "global"
-        session = get_session
 
-        if session
-          begin
-            @admin.sign_out(session.access_token, scope)
-          rescue Errors::AuthApiError
-            # Suppress API errors from admin sign_out
-          end
+        begin
+          session = get_session
+          @admin.sign_out(session.access_token, scope) if session
+        rescue Errors::AuthApiError
+          # Suppress API errors from get_session/admin.sign_out so logout always clears local state.
         end
 
         unless scope == "others"
