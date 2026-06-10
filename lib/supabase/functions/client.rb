@@ -18,7 +18,8 @@ module Supabase
     #   )
     #
     #   raw = functions.invoke("hello-world", body: { name: "Ada" })
-    #   # => raw response body as a String (default — parity with supabase-py).
+    #   # => Ruby returns String; encoding depends on response_type
+    #   #    (:text → UTF-8, :binary → ASCII-8BIT, :json → parsed object).
     #   data = functions.invoke("hello-world", body: { name: "Ada" }, response_type: :json)
     #   # => parsed JSON Hash / Array / scalar.
     #
@@ -68,10 +69,15 @@ module Supabase
       # @param body [Hash, String, nil] JSON-encoded if Hash, sent as-is if String
       # @param headers [Hash] per-invocation headers (merged over the client defaults)
       # @param region [String, nil] one of {Types::FunctionRegion}::ALL
-      # @param response_type [Symbol, String] :json to parse the response body
-      #   as JSON; anything else (the default) returns the raw response body as
-      #   a String. Matches supabase-py's contract — parsing is opt-in by
-      #   caller, never inferred from the response Content-Type.
+      # @param response_type [Symbol, String] controls how the response body
+      #   is returned. Ruby always returns a `String` (unlike supabase-py, which
+      #   returns `bytes` for binary). Supported values:
+      #     * `:json`   — parse the body as JSON; returns Hash / Array / scalar.
+      #     * `:text`   — return a `String` with `Encoding::UTF_8` (default).
+      #     * `:binary` — return a `String` with `Encoding::BINARY`
+      #       (`ASCII-8BIT`), byte-for-byte equal to the HTTP response body.
+      #   Parsing/encoding is opt-in by the caller, never inferred from the
+      #   response Content-Type.
       # @param return_response [Boolean] when true, return the deprecated
       #   {Types::Response} wrapper (data + status + headers) instead of the
       #   bare parsed body. Default `false` (US-026). The wrapper is scheduled
@@ -180,14 +186,23 @@ module Supabase
       end
 
       def parse_body(response, response_type)
-        return response.body if response.body.nil? || response.body.empty?
+        body = response.body
+        return body if body.nil?
 
-        # Parity with supabase-py: JSON is parsed *only* when the caller opts
-        # in via `response_type: :json`. Content-Type is never used to infer
-        # parsing (that's the supabase-js behavior, deliberately not ported).
-        return response.body unless response_type.to_s == "json"
+        case response_type.to_s
+        when "json"
+          return body if body.empty?
 
-        parse_json_safe(response.body) || response.body
+          parse_json_safe(body) || body
+        when "binary"
+          # Byte-for-byte copy with BINARY (ASCII-8BIT) encoding. Faraday may
+          # hand us the body tagged as UTF-8 even when it's raw bytes; force
+          # the encoding so callers get a stable, lossless String.
+          body.dup.force_encoding(Encoding::BINARY)
+        else
+          # :text (default) — return a UTF-8 String.
+          body.dup.force_encoding(Encoding::UTF_8)
+        end
       end
 
       def parse_json_safe(body)
