@@ -118,8 +118,8 @@ module Supabase
           req.params.update(merged_query) unless merged_query.empty?
         end
 
-        raise_for_relay!(response)
         raise_for_status!(response)
+        raise_for_relay!(response)
 
         data = parse_body(response, response_type)
         return data unless return_response
