@@ -263,7 +263,10 @@ module Supabase
   end
 
   # Factory that matches supabase-py's `supabase.create_client()` signature.
+  # Routes through `Client.create` so a persisted session in the auth client's
+  # storage is restored at construction time and its access_token becomes the
+  # initial Authorization bearer — instead of the anon key. See F-C6 / US-021.
   def self.create_client(supabase_url:, supabase_key:, options: {}, async: false)
-    Client.new(supabase_url: supabase_url, supabase_key: supabase_key, options: options, async: async)
+    Client.create(supabase_url: supabase_url, supabase_key: supabase_key, options: options, async: async)
   end
 end
