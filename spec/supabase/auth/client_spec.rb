@@ -9,7 +9,8 @@ RSpec.describe Supabase::Auth::Client do
       client = described_class.new(url: url, headers: headers)
 
       expect(client.url).to eq(url)
-      expect(client.headers).to eq(headers)
+      expect(client.headers).to include(headers)
+      expect(client.headers["X-Client-Info"]).to match(%r{\Agotrue-rb/})
     end
 
     it "initializes with default options" do
@@ -39,10 +40,17 @@ RSpec.describe Supabase::Auth::Client do
       expect(client).to be_a(described_class)
     end
 
-    it "initializes with empty headers by default" do
+    it "seeds Constants::DEFAULT_HEADERS (X-Client-Info) when no headers passed" do
       client = described_class.new(url: url)
 
-      expect(client.headers).to eq({})
+      expect(client.headers).to eq(Supabase::Auth::Constants::DEFAULT_HEADERS)
+      expect(client.headers["X-Client-Info"]).to match(%r{\Agotrue-rb/})
+    end
+
+    it "lets caller-supplied headers override the default X-Client-Info" do
+      client = described_class.new(url: url, headers: { "X-Client-Info" => "custom/1.0" })
+
+      expect(client.headers["X-Client-Info"]).to eq("custom/1.0")
     end
   end
 end

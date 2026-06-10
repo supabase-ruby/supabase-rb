@@ -40,7 +40,7 @@ module Supabase
       def initialize(url:, headers: {}, **options)
         opts = DEFAULT_OPTIONS.merge(options)
         @url = url
-        @headers = headers
+        @headers = Constants::DEFAULT_HEADERS.merge(headers)
         @auto_refresh_token = opts[:auto_refresh_token]
         @persist_session = opts[:persist_session]
         @detect_session_in_url = opts[:detect_session_in_url]
