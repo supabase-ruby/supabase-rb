@@ -109,6 +109,11 @@ module Supabase
         channel = options[:channel] || "sms"
         captcha_token = options[:captcha_token]
 
+        if password.nil? && (email || phone)
+          raise Errors::AuthInvalidCredentialsError,
+                "Sign up requires a password; for passwordless sign-in use sign_in_with_otp"
+        end
+
         if email
           body = {
             email: email,

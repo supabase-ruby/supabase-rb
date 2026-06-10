@@ -9,6 +9,17 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ### Changed (breaking)
 
+- **`Supabase::Auth::Client#sign_up` now requires `password` when either
+  `email` or `phone` is supplied.** Previously, calling
+  `sign_up(email: "x@y.z")` without a password silently posted
+  `{ email: "...", password: nil, ... }` to `POST /signup`, where GoTrue
+  rejected it with a generic 4xx error. From this release it raises
+  `Supabase::Auth::Errors::AuthInvalidCredentialsError` locally — paritetно
+  с `gotrue_client.py:283-286`. **Migration:** if you relied on the old
+  shape as a "passwordless / magic link" path (it never actually was —
+  the server just returned an error), switch to
+  `client.auth.sign_in_with_otp(email: "x@y.z")` for magic-link delivery,
+  or pass a real password.
 - **`Supabase::Realtime::Client#channel(topic)` always returns a new
   Channel instance.** Previously the client memoized channels by topic
   (`@channels[full_topic] ||= Channel.new(...)`), so a second

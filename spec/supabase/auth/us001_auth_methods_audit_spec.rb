@@ -435,6 +435,16 @@ RSpec.describe "US-001: Client Authentication Methods Audit" do
         .to raise_error(Supabase::Auth::Errors::AuthInvalidCredentialsError)
     end
 
+    it "sign_up raises AuthInvalidCredentialsError when email is given without password (US-023)" do
+      expect { client.sign_up(email: "x@y.z") }
+        .to raise_error(Supabase::Auth::Errors::AuthInvalidCredentialsError)
+    end
+
+    it "sign_up raises AuthInvalidCredentialsError when phone is given without password (US-023)" do
+      expect { client.sign_up(phone: "+123456789") }
+        .to raise_error(Supabase::Auth::Errors::AuthInvalidCredentialsError)
+    end
+
     it "sign_in_with_password raises AuthInvalidCredentialsError without email/phone and password" do
       expect { client.sign_in_with_password({}) }
         .to raise_error(Supabase::Auth::Errors::AuthInvalidCredentialsError)
