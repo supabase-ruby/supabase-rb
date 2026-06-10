@@ -17,7 +17,9 @@ module Supabase
 
       def _request(method, segments, json: nil, headers: nil, query: nil, body: nil, raw_response: false)
         url = Utils.join_url(@base_url, segments, query)
-        merged_headers = @headers.merge(headers || {})
+        # py parity (storage3 file_api._request): per-call headers are the base; client
+        # @headers always wins on collision. Mirrors `headers.update(self._headers)`.
+        merged_headers = (headers || {}).merge(@headers)
 
         response = @session.run_request(method.to_s.downcase.to_sym, url, nil, merged_headers) do |req|
           if json
