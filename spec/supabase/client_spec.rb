@@ -199,6 +199,82 @@ RSpec.describe Supabase::Client do
   end
 
   # ---------------------------------------------------------------------------
+  # Auth event propagation — regression guard for US-002
+  # ---------------------------------------------------------------------------
+  #
+  # The umbrella installs an `on_auth_state_change` listener inside `#auth` that
+  # mirrors a SIGNED_IN / TOKEN_REFRESHED / SIGNED_OUT into a shared
+  # `apply_auth(token)`, which rewrites the Authorization header and invalidates
+  # the memoized postgrest/storage/functions sub-clients so the next access
+  # rebuilds them with the new bearer. If a future change accidentally
+  # un-wires that listener (or drops one of the three downstream sub-clients
+  # from the invalidation set), the auth client would still rotate tokens
+  # internally while postgrest/storage/functions kept sending the stale
+  # bearer — exactly the F-C2 regression. These specs pin the contract.
+
+  describe "auth event propagation to postgrest/storage/functions" do
+    def make_session(access_token)
+      Supabase::Auth::Types::Session.new(
+        access_token:  access_token,
+        refresh_token: "refresh-#{access_token}",
+        token_type:    "bearer",
+        expires_in:    3600,
+        expires_at:    Time.now.to_i + 3600,
+        user:          nil
+      )
+    end
+
+    # Force the listener to be installed (it's wired inside `#auth`) and
+    # memoize the downstream sub-clients with the initial anon bearer so we
+    # can prove the post-event clients are a fresh build.
+    def prime!(client)
+      client.auth
+      [client.postgrest, client.storage, client.functions]
+    end
+
+    it "SIGNED_IN: new access_token reaches postgrest/storage/functions Authorization header" do
+      first_postgrest, first_storage, first_functions = prime!(client)
+      expect(first_postgrest.headers["Authorization"]).to eq("Bearer #{key}")
+      expect(first_storage.headers["Authorization"]).to   eq("Bearer #{key}")
+      expect(first_functions.headers["Authorization"]).to eq("Bearer #{key}")
+
+      client.auth.send(:_notify_all_subscribers, "SIGNED_IN", make_session("user-jwt-from-signin"))
+
+      expect(client.postgrest.headers["Authorization"]).to eq("Bearer user-jwt-from-signin")
+      expect(client.storage.headers["Authorization"]).to   eq("Bearer user-jwt-from-signin")
+      expect(client.functions.headers["Authorization"]).to eq("Bearer user-jwt-from-signin")
+
+      # And the memoized instances were swapped out (proves invalidation, not
+      # in-place mutation of the original objects).
+      expect(client.postgrest).not_to be(first_postgrest)
+      expect(client.storage).not_to   be(first_storage)
+      expect(client.functions).not_to be(first_functions)
+    end
+
+    it "TOKEN_REFRESHED: rotated access_token reaches postgrest/storage/functions Authorization header" do
+      prime!(client)
+      client.auth.send(:_notify_all_subscribers, "SIGNED_IN", make_session("initial-jwt"))
+      expect(client.postgrest.headers["Authorization"]).to eq("Bearer initial-jwt")
+
+      # Simulate the refresh loop firing with a rotated token.
+      client.auth.send(:_notify_all_subscribers, "TOKEN_REFRESHED", make_session("rotated-jwt"))
+
+      expect(client.postgrest.headers["Authorization"]).to eq("Bearer rotated-jwt")
+      expect(client.storage.headers["Authorization"]).to   eq("Bearer rotated-jwt")
+      expect(client.functions.headers["Authorization"]).to eq("Bearer rotated-jwt")
+    end
+
+    it "events the listener does not subscribe to (e.g. USER_UPDATED) leave the bearer untouched" do
+      first_postgrest, = prime!(client)
+      client.auth.send(:_notify_all_subscribers, "USER_UPDATED", make_session("should-not-propagate"))
+
+      # Same instance, same header — nothing was invalidated.
+      expect(client.postgrest).to be(first_postgrest)
+      expect(client.postgrest.headers["Authorization"]).to eq("Bearer #{key}")
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # End-to-end smoke: one HTTP roundtrip per sub-library
   # ---------------------------------------------------------------------------
 
