@@ -58,6 +58,37 @@ Upload accepts `String` (raw bytes), any `IO`, `StringIO`, or `Pathname`.
 Multipart encoding is handled by `faraday-multipart`. Metadata Hashes are
 base64-encoded into the `x-metadata` header automatically.
 
+### Storage upload
+
+`bucket.upload(path, file)` interprets its `file` argument by **class**, not
+by content:
+
+> **String = raw bytes; Pathname = file path.**
+
+To avoid the most common porting mistake from supabase-py/storage3:
+
+- **`String` = raw bytes** — the value is uploaded verbatim. Even if the string
+  *looks* like a file path (`"user1.png"`), nothing is read from disk. This
+  matches storage3's `bytes`/`IO` contract.
+- **`Pathname` = file path** — the file at that location on disk is opened
+  and streamed.
+- `IO` / `StringIO` (or any `#read`-able) — streamed as-is.
+
+```ruby
+# String → raw bytes (the literal characters "hello" are uploaded)
+bucket.upload("greeting.txt", "hello")
+
+# String holding bytes read from disk → uploaded as those bytes
+bucket.upload("user1.png", File.binread("user1.png"), content_type: "image/png")
+
+# Pathname → file on disk is opened and streamed
+bucket.upload("user1.png", Pathname.new("user1.png"), content_type: "image/png")
+```
+
+If you pass a `String` expecting "upload the file at this path", you will
+upload the path string itself. Wrap it in `Pathname.new(...)` or pass
+`File.binread(...)` / `File.open(...)`.
+
 ### Signed URLs
 
 ```ruby
