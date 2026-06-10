@@ -11,7 +11,6 @@ require_relative "realtime/timer"
 require_relative "realtime/socket"
 require_relative "realtime/channel"
 require_relative "realtime/client"
-require_relative "realtime/test_socket"
 
 module Supabase
   module Realtime

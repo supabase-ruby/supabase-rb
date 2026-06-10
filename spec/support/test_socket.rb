@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-require_relative "socket"
+require "json"
+require "supabase/realtime"
 
 module Supabase
   module Realtime
@@ -8,7 +9,8 @@ module Supabase
     # every frame the client sends in `sent_frames`, and exposes `inject(frame)`
     # so a test can simulate a server response.
     #
-    # Not intended for production use — bring a real WebSocket adapter for that.
+    # Spec-only since US-013: lives under `spec/support/` and is auto-loaded by
+    # `spec_helper.rb`. Not part of the gem's production loadpath.
     class TestSocket
       include Socket
 
