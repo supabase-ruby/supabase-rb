@@ -9,6 +9,24 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ### Changed (breaking)
 
+- **Storage path segments are now percent-encoded per RFC 3986 (unreserved
+  set) instead of `application/x-www-form-urlencoded`.** Previously
+  `Supabase::Storage::Utils.encode_segments` delegated to
+  `URI.encode_www_form_component`, which encodes spaces as `+` and leaves a
+  literal `+` untouched — so `bucket.upload("my file.png", ...)` hit
+  `/object/<bucket>/my+file.png` on the server, diverging from
+  supabase-py (which uses `yarl`, RFC 3986). Now: space → `%20`,
+  `+` → `%2B`, `/` → `%2F`, multi-byte UTF-8 encoded byte-by-byte.
+  **Breaking for callers that were compensating for the old bug** —
+  e.g. passing `"my+file.png"` to mean "literal plus on the server"
+  will now hit `/object/<bucket>/my%2Bfile.png` instead of
+  `/object/<bucket>/my+file.png`. If you were intentionally relying on
+  the form-urlencoded behavior (passing `"my+file.png"` to get a
+  server-side `+`), pass the literal character instead — encoding is
+  now done correctly for you. Affects every Storage method that takes a
+  `path:` argument (upload / update / download / exists? / info /
+  create_signed_url / create_signed_upload_url / upload_to_signed_url /
+  get_public_url).
 - **`Supabase::Client#set_auth` no longer resets the memoized `auth`
   sub-client.** Previously, calling `set_auth(token)` (or
   `set_auth(nil)` for sign-out) nilled `@auth` alongside the other

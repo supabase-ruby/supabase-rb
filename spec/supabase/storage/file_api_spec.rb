@@ -86,6 +86,25 @@ RSpec.describe Supabase::Storage::FileApi do
       expect { bucket.upload("x.png", "data") }
         .to raise_error(Supabase::Storage::Errors::StorageApiError, /Duplicate/)
     end
+
+    it "percent-encodes spaces in the destination path per RFC 3986 (space -> %20, not '+')" do
+      stub = stub_request(:post, "#{base}/object/avatars/my%20file.png")
+             .to_return(status: 200, body: JSON.generate("Key" => "avatars/my file.png"))
+
+      result = bucket.upload("my file.png", "data")
+      expect(stub).to have_been_requested
+      # The user-facing `path` echoes the original unencoded input — encoding is
+      # an HTTP-layer concern, not a return-value concern.
+      expect(result.path).to eq("my file.png")
+    end
+
+    it "percent-encodes '+' as %2B (not a literal '+') so a yarl-style server sees the same byte" do
+      stub = stub_request(:post, "#{base}/object/avatars/a%2Bb.png")
+             .to_return(status: 200, body: JSON.generate("Key" => "avatars/a+b.png"))
+
+      bucket.upload("a+b.png", "data")
+      expect(stub).to have_been_requested
+    end
   end
 
   describe "#update" do
@@ -257,6 +276,32 @@ RSpec.describe Supabase::Storage::FileApi do
         .to_return(status: 404, body: JSON.generate("message" => "Not found",
                                                     "error" => "NotFound", "statusCode" => 404))
       expect(bucket.exists?("missing.png")).to be false
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Round-trip: upload -> exists? -> download must hit one identical encoded
+  # server path. Guards against any future encoder drift between the three
+  # call sites (which all funnel through `Utils.encode_segments`, but the
+  # acceptance criterion pins it).
+  # ---------------------------------------------------------------------------
+
+  describe "encoded-path round-trip (upload / exists? / download)" do
+    it "uploads, HEADs, and GETs the same percent-encoded path for a filename with spaces" do
+      encoded_url = "#{base}/object/avatars/my%20file.png"
+
+      upload_stub   = stub_request(:post, encoded_url)
+                      .to_return(status: 200, body: JSON.generate("Key" => "avatars/my file.png"))
+      exists_stub   = stub_request(:head, encoded_url).to_return(status: 200)
+      download_stub = stub_request(:get,  encoded_url).to_return(status: 200, body: "bytes")
+
+      bucket.upload("my file.png", "data")
+      expect(bucket.exists?("my file.png")).to be(true)
+      expect(bucket.download("my file.png")).to eq("bytes")
+
+      expect(upload_stub).to   have_been_requested
+      expect(exists_stub).to   have_been_requested
+      expect(download_stub).to have_been_requested
     end
   end
 
