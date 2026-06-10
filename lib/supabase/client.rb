@@ -188,6 +188,13 @@ module Supabase
       realtime.remove_channel(channel)
     end
 
+    # Unsubscribe every realtime channel registered on this client. Mirrors
+    # supabase-py's `Client.remove_all_channels`.
+    # @see supabase-py supabase/_sync/client.py:234
+    def remove_all_channels
+      realtime.remove_all_channels
+    end
+
     # Return a Postgrest client scoped to `name` without mutating self. Matches
     # supabase-py: `client.schema("foo").from_("x")` queries the foo schema but
     # leaves `client.from(...)` (and other call sites) on the default schema.

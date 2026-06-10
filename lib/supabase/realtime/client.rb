@@ -134,9 +134,15 @@ module Supabase
         @socket&.close if @channels.empty?
       end
 
+      # Unsubscribe every tracked channel and clear the registry. Iterates over a
+      # snapshot (`@channels.dup`) so a channel that removes itself during
+      # `unsubscribe` doesn't shift the array mid-loop. Idempotent: a follow-up
+      # call on an empty registry is a no-op.
+      # @see supabase-py supabase/_sync/client.py:234
       def remove_all_channels
-        @channels.each { |ch| ch.unsubscribe }
+        @channels.dup.each { |ch| ch.unsubscribe }
         @channels.clear
+        self
       end
 
       # Update the access token, send it to every joined channel so RLS reflects

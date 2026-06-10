@@ -114,9 +114,39 @@ RSpec.describe Supabase::Realtime::Client do
     end
 
     it "clears every channel with #remove_all_channels" do
+      a = client.channel("a")
+      b = client.channel("b")
+      a.subscribe
+      b.subscribe
+
+      expect(a).to receive(:unsubscribe).and_call_original
+      expect(b).to receive(:unsubscribe).and_call_original
+
+      client.remove_all_channels
+      expect(client.get_channels).to be_empty
+    end
+
+    it "is idempotent — a follow-up #remove_all_channels on an empty registry is a no-op (US-045)" do
       client.channel("a").subscribe
       client.channel("b").subscribe
       client.remove_all_channels
+      expect(client.get_channels).to be_empty
+
+      expect { client.remove_all_channels }.not_to raise_error
+      expect(client.get_channels).to be_empty
+    end
+
+    it "iterates over a snapshot so a channel mutating @channels mid-unsubscribe doesn't skip siblings (US-045)" do
+      a = client.channel("a")
+      b = client.channel("b")
+      # Simulate a re-entrant unsubscribe that shrinks the registry while we walk it.
+      allow(a).to receive(:unsubscribe) { client.instance_variable_get(:@channels).delete(a) }
+      allow(b).to receive(:unsubscribe)
+
+      client.remove_all_channels
+
+      expect(a).to have_received(:unsubscribe)
+      expect(b).to have_received(:unsubscribe)
       expect(client.get_channels).to be_empty
     end
   end

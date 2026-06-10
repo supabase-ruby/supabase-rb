@@ -78,4 +78,29 @@ RSpec.describe Supabase::Client do
       expect(fake_socket.connected?).to be(false), "socket should close on the last remove_channel"
     end
   end
+
+  # US-045 — supabase-py parity (`supabase/_sync/client.py:234`). One-liner that
+  # unsubscribes every realtime channel registered on the umbrella client.
+  describe "#remove_all_channels" do
+    it "unsubscribes every channel and clears the realtime registry" do
+      client.channel("a")
+      client.channel("b")
+      expect(client.get_channels.size).to eq(2)
+
+      client.remove_all_channels
+
+      expect(client.get_channels).to be_empty
+      expect(fake_realtime.channels).to be_empty
+    end
+
+    it "is idempotent — calling on an empty registry does not raise" do
+      expect { client.remove_all_channels }.not_to raise_error
+      expect(client.get_channels).to be_empty
+
+      client.channel("a")
+      client.remove_all_channels
+      expect { client.remove_all_channels }.not_to raise_error
+      expect(client.get_channels).to be_empty
+    end
+  end
 end
