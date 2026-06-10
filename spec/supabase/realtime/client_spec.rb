@@ -71,10 +71,11 @@ RSpec.describe Supabase::Realtime::Client do
   end
 
   describe "#channel" do
-    it "returns the same Channel instance for repeated calls with the same topic" do
+    it "returns a new Channel instance for every call, even with the same topic (US-014, parity with supabase-py)" do
       a = client.channel("topic:1")
       b = client.channel("topic:1")
-      expect(a).to be(b)
+      expect(a).not_to be(b)
+      expect(a.topic).to eq(b.topic)
     end
 
     it "tracks channels in #get_channels" do
@@ -82,6 +83,12 @@ RSpec.describe Supabase::Realtime::Client do
       client.channel("topic:2")
       expect(client.get_channels.map(&:topic))
         .to contain_exactly("realtime:topic:1", "realtime:topic:2")
+    end
+
+    it "exposes multiple channels per topic via #get_channels (US-014)" do
+      a = client.channel("topic:1")
+      b = client.channel("topic:1")
+      expect(client.get_channels).to contain_exactly(a, b)
     end
 
     it "auto-prefixes 'realtime:' for parity with supabase-py" do

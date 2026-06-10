@@ -56,7 +56,7 @@ module Supabase
         @url     = normalize_url(url, params)
         @params  = params
         @access_token = params[:access_token] || params["access_token"]
-        @channels = {}
+        @channels = []
         @socket   = transport || socket || build_default_transport
         @timeout  = timeout
         @ref      = 0
@@ -97,7 +97,7 @@ module Supabase
         stop_reconnect
         stop_heartbeat
         @socket&.close
-        @channels.each_value { |ch| ch.instance_variable_set(:@state, Types::ChannelStates::CLOSED) }
+        @channels.each { |ch| ch.instance_variable_set(:@state, Types::ChannelStates::CLOSED) }
         self
       end
 
@@ -108,8 +108,10 @@ module Supabase
         @socket && @socket.connected?
       end
 
-      # Get or create a Channel for the given topic. Subsequent calls with the
-      # same topic return the same Channel instance, matching phoenix.js semantics.
+      # Always returns a **new** Channel instance, matching supabase-py. The
+      # client-side topic registry is a flat list, so multiple channels can
+      # share a topic (each with its own join_ref / subscription lifecycle).
+      # To look up an existing channel, walk `get_channels.find { |c| c.topic == ... }`.
       #
       # Topic names are auto-prefixed with `"realtime:"` to match supabase-py:
       # `client.channel("public:users")` reaches the same channel as
@@ -117,20 +119,22 @@ module Supabase
       # alone so existing code keeps working.
       def channel(topic, params: nil)
         full_topic = topic.start_with?("realtime:") ? topic : "realtime:#{topic}"
-        @channels[full_topic] ||= Channel.new(full_topic, params: params, socket: self)
+        ch = Channel.new(full_topic, params: params, socket: self)
+        @channels << ch
+        ch
       end
 
       def get_channels
-        @channels.values
+        @channels.dup
       end
 
       def remove_channel(channel)
         channel.unsubscribe
-        @channels.delete(channel.topic)
+        @channels.delete(channel)
       end
 
       def remove_all_channels
-        @channels.values.each { |ch| ch.unsubscribe }
+        @channels.each { |ch| ch.unsubscribe }
         @channels.clear
       end
 
@@ -141,7 +145,7 @@ module Supabase
         @params["access_token"] = token if @params.is_a?(Hash)
         return unless @socket && @socket.connected?
 
-        @channels.each_value do |channel|
+        @channels.each do |channel|
           next unless channel.joined?
 
           msg = Message.new(
@@ -311,7 +315,7 @@ module Supabase
       end
 
       def rejoin_channels
-        @channels.each_value do |channel|
+        @channels.each do |channel|
           next unless channel.instance_variable_get(:@joined_once)
           next if channel.joining?
 
@@ -323,7 +327,7 @@ module Supabase
         message = Message.parse(raw)
         return if message.topic.nil?
 
-        @channels.each_value do |channel|
+        @channels.each do |channel|
           channel.dispatch(message) if channel.topic == message.topic
         end
       end

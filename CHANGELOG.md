@@ -9,6 +9,20 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ### Changed (breaking)
 
+- **`Supabase::Realtime::Client#channel(topic)` always returns a new
+  Channel instance.** Previously the client memoized channels by topic
+  (`@channels[full_topic] ||= Channel.new(...)`), so a second
+  `client.channel("public:users")` returned the first instance. That
+  diverged from supabase-py, where the channel registry is a flat list
+  and every `channel()` call constructs a fresh subscription. From this
+  release the Ruby client matches: each call returns a brand-new
+  Channel, and `get_channels` may return multiple channels sharing one
+  topic. **Migration:** if your code relied on the memoization to fetch
+  an existing channel, switch to
+  `client.get_channels.find { |c| c.topic == "realtime:public:users" }`.
+  Each Channel still owns its own `join_push.ref` and lifecycle, so
+  `subscribe → remove_channel → channel(topic)` now yields a new
+  instance with a new ref instead of resurrecting the dead one.
 - **Storage path segments are now percent-encoded per RFC 3986 (unreserved
   set) instead of `application/x-www-form-urlencoded`.** Previously
   `Supabase::Storage::Utils.encode_segments` delegated to
