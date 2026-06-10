@@ -84,6 +84,15 @@ module Supabase
       @options =
         if options.is_a?(Hash) && !legacy_hash_shape
           ClientOptions.new(**options.transform_keys(&:to_sym))
+        elsif options.is_a?(Supabase::ClientOptions)
+          # Mirror supabase-py's `self.options = copy.copy(options)` followed by
+          # `self.options.headers = {**options.headers, ...}` — both the struct
+          # and its headers hash become unique to this client, so a downstream
+          # `client.options.headers["X"] = ...` mutation can't leak across
+          # clients constructed from the same `ClientOptions` instance (F-C?).
+          isolated = options.dup
+          isolated.headers = isolated.headers.dup
+          isolated
         else
           options
         end

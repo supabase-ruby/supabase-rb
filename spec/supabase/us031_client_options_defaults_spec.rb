@@ -55,10 +55,15 @@ RSpec.describe Supabase::Client, "US-031 — ClientOptions defaults aligned with
       expect(c.options.schema).to eq("private")
     end
 
-    it "an existing ClientOptions instance is passed through unchanged" do
+    it "an existing ClientOptions instance is isolated (shallow dup) but field values survive" do
+      # US-043 changed the contract from "pass-through (identity)" to "shallow
+      # dup" so callers reusing one ClientOptions across multiple clients can't
+      # bleed header mutations between them. Field values still round-trip.
       opts = Supabase::ClientOptions.new(schema: "ledger")
       c = described_class.new(supabase_url: project_url, supabase_key: key, options: opts)
-      expect(c.options).to be(opts)
+      expect(c.options).not_to be(opts)
+      expect(c.options).to be_a(Supabase::ClientOptions)
+      expect(c.options.schema).to eq("ledger")
     end
   end
 
