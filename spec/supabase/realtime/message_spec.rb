@@ -25,9 +25,10 @@ RSpec.describe Supabase::Realtime::Message do
       expect(described_class.parse(raw).payload).to eq({})
     end
 
-    it "raises ProtocolError on malformed JSON (rescue point for socket adapters)" do
-      expect { described_class.parse("not json") }
-        .to raise_error(Supabase::Realtime::Errors::ProtocolError, /Malformed/)
+    it "returns nil and warns on malformed JSON so the read-loop keeps going (US-017)" do
+      expect { @result = described_class.parse("not json") }
+        .to output(/Skipping malformed Phoenix frame/).to_stderr
+      expect(@result).to be_nil
     end
   end
 

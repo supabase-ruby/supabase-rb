@@ -335,7 +335,9 @@ module Supabase
 
       def handle_inbound(raw)
         message = Message.parse(raw)
-        return if message.topic.nil?
+        # `parse` returns nil on malformed JSON (US-017) — skip the frame so the
+        # socket adapter's read-loop keeps running for the next valid frame.
+        return if message.nil? || message.topic.nil?
 
         @channels.each do |channel|
           channel.dispatch(message) if channel.topic == message.topic
