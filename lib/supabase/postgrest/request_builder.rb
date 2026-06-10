@@ -338,18 +338,12 @@ module Supabase
 
       private
 
-      # PostgREST allows the same query key to appear multiple times (e.g. multiple
-      # `order=` or repeated filter columns). Ruby Hash collapses by key, so we
-      # store repeats as Arrays — Faraday emits them as multiple query params.
       def add_param(params, key, value)
-        existing = params[key]
-        params[key] = if existing.is_a?(Array)
-                        existing + [value]
-                      elsif existing
-                        [existing, value]
-                      else
-                        value
-                      end
+        if params.key?(key)
+          params[key] = Array(params[key]) << value
+        else
+          params[key] = value
+        end
         params
       end
     end
