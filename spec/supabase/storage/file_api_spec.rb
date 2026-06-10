@@ -53,6 +53,15 @@ RSpec.describe Supabase::Storage::FileApi do
       expect(stub).to have_been_requested
     end
 
+    it "defaults cache-control to 3600 (py DEFAULT_FILE_OPTIONS) when caller omits cache_control" do
+      stub = stub_request(:post, "#{base}/object/avatars/x.png")
+             .with(headers: { "cache-control" => "3600" })
+             .to_return(status: 200, body: JSON.generate("Key" => "avatars/x.png"))
+
+      bucket.upload("x.png", "data")
+      expect(stub).to have_been_requested
+    end
+
     it "base64-encodes metadata: into the x-metadata header" do
       expected = ["#{JSON.generate(user: 'u1')}"].pack("m0")
       stub = stub_request(:post, "#{base}/object/avatars/x.png")

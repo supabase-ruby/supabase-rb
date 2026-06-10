@@ -224,7 +224,9 @@ module Supabase
 
       def send_multipart(method, segments, file:, filename:, content_type:, cache_control:, upsert:, metadata:, extra_headers:, query: nil, relative_path: nil)
         request_headers = {}
-        request_headers["cache-control"] = "max-age=#{cache_control}" if cache_control
+        # py parity: when no explicit cache_control, fall back to DEFAULT_FILE_OPTIONS["cache-control"]
+        # ("3600" — raw, no max-age wrapper). When explicit, wrap as max-age=<n>.
+        request_headers["cache-control"] = cache_control ? "max-age=#{cache_control}" : Types::DEFAULT_FILE_OPTIONS["cache-control"]
         request_headers["x-upsert"]      = upsert.to_s unless upsert.nil?
         request_headers.merge!(extra_headers) if extra_headers
 
