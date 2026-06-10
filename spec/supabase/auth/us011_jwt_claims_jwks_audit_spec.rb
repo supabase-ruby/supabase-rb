@@ -406,7 +406,8 @@ RSpec.describe "US-011: Audit JWT Claims & JWKS" do
         "refresh_token" => "refresh-token",
         "token_type" => "bearer",
         "expires_in" => 3600,
-        "expires_at" => Time.now.to_i + 3600
+        "expires_at" => Time.now.to_i + 3600,
+        "user" => { "id" => "session-user" }
       }
       storage = client.instance_variable_get(:@storage)
       storage.set_item(Supabase::Auth::Client::STORAGE_KEY, session_data.to_json)

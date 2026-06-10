@@ -27,7 +27,7 @@ RSpec.describe "Supabase.create_client bootstrap (US-021 / F-C6)" do
       "token_type"    => "bearer",
       "expires_in"    => 3600,
       "expires_at"    => Time.now.to_i + 3600,
-      "user"          => nil
+      "user"          => { "id" => "user-from-storage" }
     }
     storage = Supabase::Auth::MemoryStorage.new
     storage.set_item(Supabase::Auth::Client::STORAGE_KEY, JSON.generate(serialized))

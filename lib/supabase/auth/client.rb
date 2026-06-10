@@ -961,6 +961,7 @@ module Supabase
           return nil unless data["access_token"] || data[:access_token]
           return nil unless data["refresh_token"] || data[:refresh_token]
           return nil unless data["expires_at"] || data[:expires_at]
+          return nil if data["user"].nil? && data[:user].nil?
 
           expires_at = data["expires_at"] || data[:expires_at]
           begin

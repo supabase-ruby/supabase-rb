@@ -967,10 +967,24 @@ RSpec.describe "Request body assertions" do
     end
 
     it "returns session when all required fields present" do
-      raw = '{"access_token":"abc","refresh_token":"def","expires_at":9999999999,"token_type":"bearer"}'
+      raw = '{"access_token":"abc","refresh_token":"def","expires_at":9999999999,' \
+            '"token_type":"bearer","user":{"id":"u1"}}'
       result = client.send(:_get_valid_session, raw)
       expect(result).not_to be_nil
       expect(result.access_token).to eq("abc")
+    end
+
+    it "returns nil when user is missing (US-039)" do
+      raw = '{"access_token":"abc","refresh_token":"def","expires_at":9999999999,"token_type":"bearer"}'
+      result = client.send(:_get_valid_session, raw)
+      expect(result).to be_nil
+    end
+
+    it "returns nil when user is explicitly null (US-039)" do
+      raw = '{"access_token":"abc","refresh_token":"def","expires_at":9999999999,' \
+            '"token_type":"bearer","user":null}'
+      result = client.send(:_get_valid_session, raw)
+      expect(result).to be_nil
     end
   end
 
@@ -988,7 +1002,8 @@ RSpec.describe "Request body assertions" do
         refresh_token: "test-refresh",
         token_type: "bearer",
         expires_in: 3600,
-        expires_at: Time.now.to_i + 3600
+        expires_at: Time.now.to_i + 3600,
+        user: { id: "u1" }
       }
       persist_client._storage.set_item(persist_client._storage_key, JSON.generate(valid_session_data))
 
@@ -1070,7 +1085,8 @@ RSpec.describe "Request body assertions" do
         refresh_token: "stored-refresh",
         token_type: "bearer",
         expires_in: 3600,
-        expires_at: Time.now.to_i + 3600
+        expires_at: Time.now.to_i + 3600,
+        user: { id: "u1" }
       }
       persist_client._storage.set_item(persist_client._storage_key, JSON.generate(session_data))
 
@@ -1525,7 +1541,8 @@ RSpec.describe "Request body assertions" do
         refresh_token: "valid-refresh",
         token_type: "bearer",
         expires_in: 0,
-        expires_at: Time.now.to_i - 100
+        expires_at: Time.now.to_i - 100,
+        user: { id: "u1" }
       }
       persist_client._storage.set_item(persist_client._storage_key, JSON.generate(expired_data))
 

@@ -774,7 +774,8 @@ RSpec.describe "US-002: Session Management Audit" do
         "refresh_token" => "rt",
         "expires_at" => now + 3600,
         "expires_in" => 3600,
-        "token_type" => "bearer"
+        "token_type" => "bearer",
+        "user" => { "id" => "u1" }
       })
 
       session = client.send(:_get_valid_session, raw)
@@ -851,7 +852,8 @@ RSpec.describe "US-002: Session Management Audit" do
         "refresh_token" => "stored-refresh",
         "expires_at" => now + 3600,
         "expires_in" => 3600,
-        "token_type" => "bearer"
+        "token_type" => "bearer",
+        "user" => { "id" => "u1" }
       }
       client._storage.set_item(client._storage_key, JSON.generate(session_data))
 

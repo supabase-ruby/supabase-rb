@@ -187,7 +187,7 @@ RSpec.describe Supabase::Client do
         token_type:    "bearer",
         expires_in:    3600,
         expires_at:    Time.now.to_i + 3600,
-        user:          nil
+        user:          Supabase::Auth::Types::User.new(id: "u1")
       )
       client.auth.send(:_save_session, session)
       expect(client.auth.get_session&.access_token).to eq("stored-access-token")
