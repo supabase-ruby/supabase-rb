@@ -62,6 +62,12 @@ RSpec.describe Supabase::Postgrest::Errors do
     it "defaults raw to {} when nil is passed in" do
       expect(described_class.new(nil).raw).to eq({})
     end
+
+    it "always returns a String from #message, even for an empty payload" do
+      expect(described_class.new({}).message).to be_a(String)
+      expect(described_class.new(nil).message).to be_a(String)
+      expect(described_class.new("code" => "PGRST116").message).to be_a(String)
+    end
   end
 
   describe ".generate_default_error_message" do

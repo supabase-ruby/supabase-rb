@@ -7,7 +7,7 @@ module Supabase
       # Mirrors supabase-py's APIError — exposes :message, :code, :hint, :details
       # plus the raw error hash via {#raw}.
       class APIError < StandardError
-        attr_reader :raw, :message, :code, :hint, :details
+        attr_reader :raw, :code, :hint, :details
 
         # @param error [Hash] parsed JSON body from a PostgREST error response
         def initialize(error = {})
@@ -17,6 +17,11 @@ module Supabase
           @hint = @raw["hint"] || @raw[:hint]
           @details = @raw["details"] || @raw[:details]
           super(to_s)
+        end
+
+        # Override StandardError#message so the field-level value is non-nil.
+        def message
+          @message.to_s
         end
 
         def to_s
