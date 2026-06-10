@@ -7,6 +7,54 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ## [Unreleased]
 
+## [3.0.0] — Realtime + Auth parity with supabase-py
+
+**Breaking.** Two Realtime behaviors change shape to match `supabase-py` and
+`phoenix.js`. Anyone consuming the old shapes needs to update call sites.
+
+### Breaking changes
+
+- **`Realtime::Presence` state and callbacks.** State is now stored as
+  `{ key => [{ "presence_ref" => ..., ...data }, ...] }` instead of the raw
+  Phoenix wire format `{ key => { "metas" => [...] } }`. Wire payloads are
+  transformed via `Presence.transform_state` before being stored or emitted.
+  `on_join` / `on_leave` callbacks now receive `(key, current_presences,
+  new_presences)` (was `(key, presence_hash)`).
+- **`Realtime::Channel#unsubscribe` is ack-based.** State stays in `LEAVING`
+  until the server's `phx_reply` lands (or the leave push times out); only
+  then does it move to `CLOSED` and fire `on_close` listeners. Code that
+  asserted `channel.closed?` synchronously after `unsubscribe` must now wait
+  for the ack.
+
+### Added
+
+- **`Realtime::Push#start_timeout`.** Pushes now arm a timer when they go on
+  the wire; if no reply arrives within the configured window the push
+  resolves with `AckStatus::TIMEOUT` and removes itself from the channel's
+  `pending_pushes` registry. `resolve` / `time_out` are mutex-guarded so a
+  late ack cannot double-fire callbacks.
+- **`Realtime::Client#push` send buffer.** Frames pushed before the socket
+  connects are queued and flushed in `handle_socket_open`, matching
+  `supabase-py`'s `send_buffer`. Offline pushes are no longer silently
+  dropped.
+- **`Realtime::Channel#subscribe` postgres_changes mismatch detection.** The
+  server's reply to `phx_join` is now diffed against the local
+  `on_postgres_changes` callbacks. A mismatch triggers an automatic
+  `unsubscribe` and the subscribe callback fires with `CHANNEL_ERROR` plus a
+  `Realtime::Errors::RealtimeError` — instead of silently subscribing to a
+  different set of rows than requested.
+- **`Auth::Errors::UserDoesntExist`.** New exception class, raised by
+  `Client#set_session` and `Client#exchange_code_for_session` when
+  `get_user(access_token)` returns `nil` — mirrors `supabase-py`'s
+  `UserDoesntExist`.
+
+### Fixed
+
+- **`Auth::Helpers.handle_exception` Cloudflare codes.** HTTP 520, 521,
+  522, 523, 524, and 530 now produce `AuthRetryableError` (previously only
+  502/503/504). Users behind Cloudflare-fronted deployments will now see
+  proper retry behavior for upstream-origin failures.
+
 ## [2.0.0] — Single fat gem
 
 **Breaking.** `supabase-rb` is now a single self-contained gem packaging Auth,
