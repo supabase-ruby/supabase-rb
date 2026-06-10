@@ -224,10 +224,20 @@ module Supabase
     # memoized instances so they pick up the new token on next access.
     # `@auth` is intentionally preserved — clearing it would also discard the
     # in-memory persisted session held by its storage backend.
+    #
+    # Under `async: true` the realtime fan-out is dispatched as a child
+    # `Async` task so the calling fiber returns immediately instead of
+    # waiting for every joined channel's `Socket#send` to drain — see
+    # spec/async/apply_auth_non_blocking_spec.rb (US-047 / US-048).
     def apply_auth(token)
       @headers["Authorization"] = "Bearer #{token || @supabase_key}"
       @storage = @functions = @postgrest = nil
-      @realtime&.set_auth(token)
+      if @async
+        require "async" unless defined?(Async)
+        Async { @realtime&.set_auth(token) }
+      else
+        @realtime&.set_auth(token)
+      end
     end
 
     def auth_class

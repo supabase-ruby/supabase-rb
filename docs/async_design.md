@@ -193,7 +193,60 @@ When the monorepo splits into a meta-gem (task #16), we can offer:
 
 This three-tier split keeps the dependency surface honest.
 
-## 10. Open questions deferred to task #8
+## 10. `apply_auth` under `async: true` — non-blocking realtime fan-out
+
+`Supabase::Client#set_auth` (and the `on_auth_state_change` listener installed on
+`#auth`) funnels through the private `#apply_auth(token)` on the umbrella. That
+method rotates the shared `Authorization` header, nils out the memoized REST sub-
+clients, and then calls `@realtime&.set_auth(token)` — which iterates every
+joined channel and synchronously pushes an `ACCESS_TOKEN` frame through the
+Realtime `Socket#send` for each one.
+
+Under the sync client that's fine: the caller is on a thread, and a slow send is
+a slow `send`. Under `async: true` it is **not** fine: the calling fiber is
+expected to keep flowing, and a `Socket#send` that takes hundreds of
+milliseconds (slow network, large fan-out) means the calling fiber sits on the
+floor for the full duration even though the reactor itself happily schedules
+sibling fibers (cooperative `Kernel.sleep`).
+
+`apply_auth` therefore branches on `@async`:
+
+```ruby
+def apply_auth(token)
+  @headers["Authorization"] = "Bearer #{token || @supabase_key}"
+  @storage = @functions = @postgrest = nil
+  if @async
+    require "async" unless defined?(Async)
+    Async { @realtime&.set_auth(token) }
+  else
+    @realtime&.set_auth(token)
+  end
+end
+```
+
+- `async: false` — unchanged: the realtime fan-out runs inline on the caller.
+- `async: true` — the fan-out is wrapped in `Async { ... }`. When invoked from
+  inside an existing reactor (the documented usage pattern in §4) this spawns a
+  child task on the current scheduler and the calling fiber returns
+  immediately. The outer `Async do ... end` block will still wait for the child
+  task to drain before it exits, so the `ACCESS_TOKEN` frame is guaranteed to
+  reach every channel — it just isn't *awaited* inline by the caller. Called
+  from outside a reactor, `Async { ... }` boots a one-shot reactor and runs
+  synchronously, matching the sync semantics so misconfigured callers don't
+  silently lose the fan-out.
+
+The reproducer + regression test for this behaviour is
+**`spec/async/apply_auth_non_blocking_spec.rb`** (originally landed under
+US-047 as a `pending` measurement, flipped green under US-048). It builds an
+`async: true` umbrella, swaps in a `Realtime::Client` backed by a transport
+whose `Socket#send` sleeps for `WRITE_DELAY = 0.2 s`, forces one channel to
+`JOINED`, and from inside an `Async do |task| ... end` block measures
+`apply_auth_duration` while a sibling ticker fiber counts ticks. After the fix
+the calling fiber returns in well under `WRITE_DELAY` (the `expect` asserts
+`apply_auth_duration < WRITE_DELAY`) and the slow send still completes before
+the outer Async block exits.
+
+## 11. Open questions deferred to task #8
 
 - **Timeout semantics**: `async-http-faraday` honors Faraday's `timeout`/`open_timeout`. Need to verify behavior under cancellation (`task.stop`) and that errors map correctly.
 - **Retry middleware**: sync uses Faraday's `:retry` middleware. Need to confirm it composes with the async adapter (it should — middleware sits above the adapter).

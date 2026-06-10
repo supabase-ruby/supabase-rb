@@ -115,24 +115,16 @@ RSpec.describe "US-047 — Supabase::Client#apply_auth fiber-reactor blocking me
     puts "  [US-047] reactor_scheduled_others = #{tick_count.positive?}"
     puts "  [US-047] apply_auth_non_blocking  = #{apply_auth_duration < WRITE_DELAY}"
 
-    # Sanity: the ACCESS_TOKEN frame did reach the socket.
+    # Sanity: the ACCESS_TOKEN frame did reach the socket — the wrap is
+    # fire-and-forget but the outer reactor still awaits the child task
+    # before exiting `Async do ... end`, so by the time we get here the
+    # SlowWriteTestSocket has recorded the frame.
     expect(slow_socket.sent_frames.size).to eq(1)
 
-    if apply_auth_duration >= WRITE_DELAY * 0.9
-      # Calling fiber waited the full WRITE_DELAY (or close to it) — the
-      # current implementation synchronously awaits Socket#send. Fix
-      # tracked in US-048; mark this assertion pending so the suite stays
-      # green while the reproducer keeps documenting the behaviour.
-      pending(
-        "Supabase::Client#apply_auth synchronously awaits Realtime ACCESS_TOKEN " \
-        "Socket#send — the calling fiber waits the full WRITE_DELAY before " \
-        "returning. Fix tracked in US-048."
-      )
-      expect(apply_auth_duration).to be < WRITE_DELAY
-    else
-      # Non-blocking outcome: apply_auth returned before the write
-      # completed (or the impl was rewritten to be cooperative end-to-end).
-      expect(apply_auth_duration).to be < WRITE_DELAY
-    end
+    # US-048: `apply_auth` under `async: true` dispatches the realtime
+    # fan-out into an `Async { ... }` child task — the calling fiber
+    # returns before the slow `Socket#send` drains, so the measured
+    # duration is well under WRITE_DELAY.
+    expect(apply_auth_duration).to be < WRITE_DELAY
   end
 end
