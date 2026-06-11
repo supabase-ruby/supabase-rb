@@ -4,6 +4,11 @@ require "supabase/realtime"
 
 # US-011: Channel uses Timer for rejoin (F-C7 part 2).
 #
+# US-006 supersedes the backoff-curve expectation in this file (delays are
+# now [4, 8, 16] s, matching py's `timer_calc(tries+1)` with `2**tries`).
+# The rest of the contract — schedule on join error/timeout, reset on JOINED,
+# re-emit phx_join when the tick fires — is unchanged.
+#
 # The channel owns a {Supabase::Realtime::Timer} (introduced in US-010) and
 # schedules a tick on it whenever the join handshake errors or times out.
 # A successful JOINED reply resets the timer so the backoff curve starts over
@@ -120,20 +125,21 @@ RSpec.describe Supabase::Realtime::Channel, "rejoin timer (US-011)" do
     end
   end
 
-  describe "backoff curve" do
-    it "uses the timer's current tries to compute each delay (2**tries capped at 60s)" do
+  describe "backoff curve (US-006 supersedes)" do
+    it "follows py's `timer_calc(tries+1)` curve with `2**tries` (4, 8, 16 s)" do
       delays = []
       allow(rejoin_timer).to receive(:sleep) { |s| delays << s }
 
       channel.subscribe
       3.times do
-        # Each call to on_join_error schedules another tick, advancing tries
-        # by one after the sleep stub returns.
+        # Each on_join_error schedules another tick. Timer bumps `tries` first
+        # and calls backoff with `tries + 1`, so the rb curve mirrors py's
+        # rejoin timer exactly: 2**2, 2**3, 2**4 = 4, 8, 16.
         channel.send(:on_join_error, { "reason" => "denied" })
         join_rejoin_thread
       end
 
-      expect(delays).to eq([1.0, 2.0, 4.0])
+      expect(delays).to eq([4.0, 8.0, 16.0])
     end
   end
 end

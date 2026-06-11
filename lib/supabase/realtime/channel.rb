@@ -40,9 +40,13 @@ module Supabase
         @join_push = Push.new(self, Types::ChannelEvents::JOIN, @params)
         @subscribe_callback = nil
 
+        # py rejoin uses `lambda tries: 2**tries` with no cap
+        # (`realtime/_async/channel.py:109-111`). Timer (US-006) bumps `tries`
+        # before invoking this lambda with `tries + 1`, so the curve for the
+        # first five attempts is 4, 8, 16, 32, 64 s — identical to py.
         @rejoin_timer = Timer.new(
           callback: -> { rejoin if @joined_once && !leaving? && !closed? },
-          backoff:  ->(tries) { [(2.0**tries), 60.0].min }
+          backoff:  ->(tries) { 2.0**tries }
         )
 
         @join_push

@@ -2,6 +2,12 @@
 
 require "supabase/realtime"
 
+# US-006 updated this file: Timer now ports supabase-py's AsyncTimer 1:1 —
+# `schedule_timeout` increments `tries` BEFORE computing the delay, and passes
+# `tries + 1` to the backoff lambda (see py `realtime/_async/timer.py:24-29`).
+# The previous rb behavior (passing `tries`, incrementing after sleep) gave
+# a different curve and is captured in the new
+# `us006_timer_backoff_curve_spec.rb` regression spec.
 RSpec.describe Supabase::Realtime::Timer do
   let(:fired)    { [] }
   let(:callback) { -> { fired << :tick } }
@@ -20,19 +26,20 @@ RSpec.describe Supabase::Realtime::Timer do
   end
 
   describe "#schedule_timeout" do
-    it "passes the current tries (starting at 0) to backoff" do
+    it "bumps tries to 1 BEFORE computing the delay and passes tries+1 to backoff" do
       delays = []
       allow(timer).to receive(:sleep) { |s| delays << s }
 
       timer.schedule_timeout
       join_pending(timer)
 
-      expect(delays).to eq([1])
+      # py: tries 0→1, delay = timer_calc(1+1) = 2**2 = 4
+      expect(delays).to eq([4])
       expect(timer.tries).to eq(1)
       expect(fired).to eq([:tick])
     end
 
-    it "produces 1, 2, 4 second delays across three ticks (formula 2**tries)" do
+    it "produces 4, 8, 16 second delays across three ticks (formula 2**(tries+1))" do
       delays = []
       allow(timer).to receive(:sleep) { |s| delays << s }
 
@@ -41,7 +48,7 @@ RSpec.describe Supabase::Realtime::Timer do
         join_pending(timer)
       end
 
-      expect(delays).to eq([1, 2, 4])
+      expect(delays).to eq([4, 8, 16])
       expect(fired.length).to eq(3)
       expect(timer.tries).to eq(3)
     end
@@ -103,7 +110,8 @@ RSpec.describe Supabase::Realtime::Timer do
       timer.schedule_timeout
       join_pending(timer)
 
-      expect(delays.last).to eq(1)
+      # After reset: tries 0→1, delay = 2**(1+1) = 4
+      expect(delays.last).to eq(4)
     end
 
     it "returns self for chaining" do
