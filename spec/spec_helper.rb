@@ -1,9 +1,21 @@
 # frozen_string_literal: true
 
 require "simplecov"
+
+# Skip the global coverage threshold when the only thing being run is the
+# integration smoke suite. Those specs deliberately exercise a small slice of
+# `lib/` against a live Supabase stack, so the global gate would always fail
+# even on a fully passing run. Full-suite runs (`bundle exec rspec`) still
+# enforce the threshold.
+_integration_only =
+  begin
+    user_args = ARGV.reject { |a| a.start_with?("-") }
+    user_args.any? && user_args.all? { |a| a.include?("spec/integration") }
+  end
+
 SimpleCov.start do
   add_filter "/spec/"
-  minimum_coverage 88
+  minimum_coverage 88 unless _integration_only
 end
 
 require "supabase/auth"
