@@ -184,15 +184,23 @@ module Supabase
       realtime.get_channels
     end
 
+    # Unsubscribe a channel and drop it from the realtime registry. Mirrors
+    # supabase-py: the sync client blocks until the phx_leave frame is written;
+    # the async client (`async def remove_channel`) lets callers await it.
+    # Under `async: true` we get the same shape via {#dispatch_realtime} — the
+    # call returns an `Async::Task` the caller may `.wait` on (US-050), so a
+    # slow `Socket#send` never stalls the calling fiber.
+    # @see supabase-py supabase/_async/client.py:231
     def remove_channel(channel)
-      realtime.remove_channel(channel)
+      dispatch_realtime { realtime.remove_channel(channel) }
     end
 
     # Unsubscribe every realtime channel registered on this client. Mirrors
-    # supabase-py's `Client.remove_all_channels`.
+    # supabase-py's `Client.remove_all_channels`; same sync/async contract as
+    # {#remove_channel}.
     # @see supabase-py supabase/_sync/client.py:234
     def remove_all_channels
-      realtime.remove_all_channels
+      dispatch_realtime { realtime.remove_all_channels }
     end
 
     # Return a Postgrest client scoped to `name` without mutating self. Matches
@@ -232,12 +240,22 @@ module Supabase
     def apply_auth(token)
       @headers["Authorization"] = "Bearer #{token || @supabase_key}"
       @storage = @functions = @postgrest = nil
-      if @async
-        require "async" unless defined?(Async)
-        Async { @realtime&.set_auth(token) }
-      else
-        @realtime&.set_auth(token)
-      end
+      dispatch_realtime { @realtime&.set_auth(token) }
+    end
+
+    # Shared dispatch for every umbrella → realtime call that may touch the
+    # socket (`set_auth` fan-out, `remove_channel`, `remove_all_channels`).
+    # The realtime client is thread-based, so its socket writes are plain
+    # blocking Ruby. Sync mode calls straight through. Under `async: true`
+    # the block runs in a child `Async` task: inside a reactor the calling
+    # fiber gets the task back immediately (`.wait` restores Python's `await`
+    # semantics); outside a reactor `Async { }` degrades to running inline,
+    # which matches the sync path.
+    def dispatch_realtime(&block)
+      return yield unless @async
+
+      require "async" unless defined?(Async)
+      Async(&block)
     end
 
     def auth_class
