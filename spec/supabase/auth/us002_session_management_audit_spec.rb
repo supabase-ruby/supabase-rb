@@ -741,7 +741,9 @@ RSpec.describe "US-002: Session Management Audit" do
 
   # ----------------------------------------------------------------
   # _get_valid_session: validates stored session data
-  # Python: checks access_token, refresh_token, expires_at; parses expires_at as int
+  # US-005 / Q1: parity with supabase-py's `_get_valid_session` — only the
+  # explicit `expires_at` check is enforced; missing access_token /
+  # refresh_token / user no longer reject the session at parse time.
   # ----------------------------------------------------------------
   describe "_get_valid_session validation" do
     it "returns nil for nil input" do
@@ -749,16 +751,20 @@ RSpec.describe "US-002: Session Management Audit" do
       expect(client.send(:_get_valid_session, nil)).to be_nil
     end
 
-    it "returns nil when access_token is missing" do
+    it "accepts session without access_token (parity with py)" do
       client = build_client
       raw = JSON.generate({ "refresh_token" => "rt", "expires_at" => now + 3600 })
-      expect(client.send(:_get_valid_session, raw)).to be_nil
+      session = client.send(:_get_valid_session, raw)
+      expect(session).to be_a(Supabase::Auth::Types::Session)
+      expect(session.access_token).to be_nil
     end
 
-    it "returns nil when refresh_token is missing" do
+    it "accepts session without refresh_token (parity with py)" do
       client = build_client
       raw = JSON.generate({ "access_token" => "at", "expires_at" => now + 3600 })
-      expect(client.send(:_get_valid_session, raw)).to be_nil
+      session = client.send(:_get_valid_session, raw)
+      expect(session).to be_a(Supabase::Auth::Types::Session)
+      expect(session.refresh_token).to be_nil
     end
 
     it "returns nil when expires_at is missing" do

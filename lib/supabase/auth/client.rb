@@ -983,18 +983,23 @@ module Supabase
 
       private
 
+      # US-005 / Q1: parity with supabase-py — `_get_valid_session` checks only
+      # `expires_at` (matches `gotrue_client.py:_get_valid_session`, which after
+      # pydantic-validation does a single explicit `expires_at is None` check).
+      # Defence against missing access_token/refresh_token/user is deferred to
+      # the use site: `_call_refresh_token` raises `AuthSessionMissing` for an
+      # empty refresh token, `get_user`/admin calls return early on a nil
+      # access token, and `Types::Session.from_hash` tolerates a nil `user`.
       def _get_valid_session(raw_session)
         return nil unless raw_session
 
         begin
           data = raw_session.is_a?(String) ? JSON.parse(raw_session) : raw_session
           return nil unless data
-          return nil unless data["access_token"] || data[:access_token]
-          return nil unless data["refresh_token"] || data[:refresh_token]
-          return nil unless data["expires_at"] || data[:expires_at]
-          return nil if data["user"].nil? && data[:user].nil?
 
           expires_at = data["expires_at"] || data[:expires_at]
+          return nil if expires_at.nil?
+
           begin
             expires_at = Integer(expires_at)
             data["expires_at"] = expires_at

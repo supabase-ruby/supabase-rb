@@ -941,17 +941,22 @@ RSpec.describe "Request body assertions" do
     end
   end
 
-  describe "#_get_valid_session strict validation" do
-    it "returns nil when access_token is missing" do
+  # US-005 / Q1: parity with supabase-py's `_get_valid_session` — only the
+  # explicit `expires_at` check is enforced here; missing access_token /
+  # refresh_token / user no longer reject the session at parse time.
+  describe "#_get_valid_session parity validation" do
+    it "accepts session without access_token (parity with py)" do
       raw = '{"refresh_token":"abc","expires_at":9999999999}'
       result = client.send(:_get_valid_session, raw)
-      expect(result).to be_nil
+      expect(result).to be_a(Supabase::Auth::Types::Session)
+      expect(result.access_token).to be_nil
     end
 
-    it "returns nil when refresh_token is missing" do
+    it "accepts session without refresh_token (parity with py)" do
       raw = '{"access_token":"abc","expires_at":9999999999}'
       result = client.send(:_get_valid_session, raw)
-      expect(result).to be_nil
+      expect(result).to be_a(Supabase::Auth::Types::Session)
+      expect(result.refresh_token).to be_nil
     end
 
     it "returns nil when expires_at is missing" do
@@ -974,17 +979,19 @@ RSpec.describe "Request body assertions" do
       expect(result.access_token).to eq("abc")
     end
 
-    it "returns nil when user is missing (US-039)" do
+    it "accepts session without user (parity with py — Q1)" do
       raw = '{"access_token":"abc","refresh_token":"def","expires_at":9999999999,"token_type":"bearer"}'
       result = client.send(:_get_valid_session, raw)
-      expect(result).to be_nil
+      expect(result).to be_a(Supabase::Auth::Types::Session)
+      expect(result.user).to be_nil
     end
 
-    it "returns nil when user is explicitly null (US-039)" do
+    it "accepts session with explicitly null user (parity with py — Q1)" do
       raw = '{"access_token":"abc","refresh_token":"def","expires_at":9999999999,' \
             '"token_type":"bearer","user":null}'
       result = client.send(:_get_valid_session, raw)
-      expect(result).to be_nil
+      expect(result).to be_a(Supabase::Auth::Types::Session)
+      expect(result.user).to be_nil
     end
   end
 

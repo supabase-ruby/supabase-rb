@@ -323,7 +323,10 @@ RSpec.describe Supabase::Auth::Client, "initialization flow" do
       expect(storage.get_item("supabase.auth.token")).to be_nil
     end
 
-    it "removes session missing access_token" do
+    # US-005 / Q1: relaxed to py-parity. Sessions with missing access_token /
+    # refresh_token are accepted at parse time; defence against nil fields is
+    # deferred to the use site (see us005_get_valid_session_parity_spec.rb).
+    it "restores session even when access_token is missing (US-005 parity with py)" do
       storage = Supabase::Auth::MemoryStorage.new
       session_data = { "refresh_token" => "rt", "expires_at" => Time.now.to_i + 3600 }
       storage.set_item("supabase.auth.token", JSON.generate(session_data))
@@ -331,10 +334,11 @@ RSpec.describe Supabase::Auth::Client, "initialization flow" do
       client = described_class.new(url: url, headers: headers, storage: storage)
       client.initialize_from_storage
 
-      expect(storage.get_item("supabase.auth.token")).to be_nil
+      expect(storage.get_item("supabase.auth.token")).not_to be_nil
+      expect(client.instance_variable_get(:@current_session).access_token).to be_nil
     end
 
-    it "removes session missing refresh_token" do
+    it "restores session even when refresh_token is missing (US-005 parity with py)" do
       storage = Supabase::Auth::MemoryStorage.new
       session_data = { "access_token" => "at", "expires_at" => Time.now.to_i + 3600 }
       storage.set_item("supabase.auth.token", JSON.generate(session_data))
@@ -342,7 +346,8 @@ RSpec.describe Supabase::Auth::Client, "initialization flow" do
       client = described_class.new(url: url, headers: headers, storage: storage)
       client.initialize_from_storage
 
-      expect(storage.get_item("supabase.auth.token")).to be_nil
+      expect(storage.get_item("supabase.auth.token")).not_to be_nil
+      expect(client.instance_variable_get(:@current_session).refresh_token).to be_nil
     end
 
     it "removes session missing expires_at" do
