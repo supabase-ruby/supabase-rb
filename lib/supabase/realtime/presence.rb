@@ -11,57 +11,79 @@ module Supabase
     # shape before being stored or emitted, so listener callbacks receive
     # `(key, current_presences, new_presences)` with `presence_ref` keys.
     class Presence
-      attr_reader :state
-
       def initialize(logger: nil)
         @state = {}
+        # Guards every read/write of @state so a reader thread iterating over
+        # `presence_state` cannot collide with the realtime read-thread
+        # applying inbound presence_state / presence_diff frames. US-007 stress
+        # spec demonstrates the bare-Hash version raises "can't add a new key
+        # into hash during iteration" under load; with the mutex + snapshot
+        # accessor the same scenario stays clean. Callbacks are fanned out
+        # AFTER the mutex is released to avoid user code reentering `state`
+        # under the same lock.
+        @mutex = Mutex.new
         @on_sync_callbacks = []
         @on_join_callbacks = []
         @on_leave_callbacks = []
         @logger = logger
       end
 
+      # Snapshot of the current presence state. Returns a shallow dup of the
+      # internal hash so callers can iterate safely while the read-thread
+      # continues to apply inbound diffs (US-007 thread safety AC).
+      def state
+        @mutex.synchronize { @state.dup }
+      end
+
       # First snapshot after joining: diff against the (possibly empty) local
       # state and apply the joins/leaves through the same code path as
       # `sync_diff`.
       def sync_state(raw_state)
-        new_state = self.class.transform_state(raw_state)
-        joins = {}
-        leaves = @state.reject { |k, _| new_state.key?(k) }
+        events = nil
+        @mutex.synchronize do
+          new_state = self.class.transform_state(raw_state)
+          joins = {}
+          leaves = @state.reject { |k, _| new_state.key?(k) }
 
-        new_state.each do |key, presences|
-          current = @state[key] || []
+          new_state.each do |key, presences|
+            current = @state[key] || []
 
-          if current.any?
-            current_refs = current.map { |p| p["presence_ref"] }
-            new_refs = presences.map { |p| p["presence_ref"] }
-            joined_presences = presences.reject { |p| current_refs.include?(p["presence_ref"]) }
-            left_presences = current.reject { |p| new_refs.include?(p["presence_ref"]) }
-            joins[key] = joined_presences if joined_presences.any?
-            leaves[key] = left_presences if left_presences.any?
-          else
-            joins[key] = presences
+            if current.any?
+              current_refs = current.map { |p| p["presence_ref"] }
+              new_refs = presences.map { |p| p["presence_ref"] }
+              joined_presences = presences.reject { |p| current_refs.include?(p["presence_ref"]) }
+              left_presences = current.reject { |p| new_refs.include?(p["presence_ref"]) }
+              joins[key] = joined_presences if joined_presences.any?
+              leaves[key] = left_presences if left_presences.any?
+            else
+              joins[key] = presences
+            end
           end
-        end
 
-        sync_diff_internal(joins, leaves)
+          events = apply_sync_diff_locked(joins, leaves)
+        end
+        fire_events(events)
         fire_sync_callbacks
-        @state
+        state
       end
 
       # Subsequent presence_diff messages: apply joins/leaves to the local state.
       # Raw input is transformed before being applied.
       def sync_diff(raw_diff)
-        joins = self.class.transform_state(raw_diff["joins"] || {})
-        leaves = self.class.transform_state(raw_diff["leaves"] || {})
-        sync_diff_internal(joins, leaves)
+        events = nil
+        @mutex.synchronize do
+          joins = self.class.transform_state(raw_diff["joins"] || {})
+          leaves = self.class.transform_state(raw_diff["leaves"] || {})
+          events = apply_sync_diff_locked(joins, leaves)
+        end
+        fire_events(events)
         fire_sync_callbacks
-        @state
+        state
       end
 
       # Flat list of every presence currently tracked.
       def list
-        @state.values.flatten
+        @mutex.synchronize { @state.values.flatten }
       end
 
       def on_sync(&block)
@@ -111,7 +133,14 @@ module Supabase
 
       private
 
-      def sync_diff_internal(joins, leaves)
+      # Mutates @state and returns the join/leave events that should be fanned
+      # out to user callbacks after the mutex is released. Order matches the
+      # py reference (`AsyncRealtimePresence._sync_diff`): joins applied first,
+      # then leaves; for leaves, the key is removed from @state once empty so
+      # the next sync sees it as gone.
+      def apply_sync_diff_locked(joins, leaves)
+        events = []
+
         joins.each do |key, new_presences|
           current_presences = @state[key] || []
           @state[key] = new_presences
@@ -122,11 +151,7 @@ module Supabase
             @state[key] = keep_from_current + @state[key]
           end
 
-          @on_join_callbacks.each do |cb|
-            CallbackSafety.safe(@logger, "presence_join") do
-              cb.call(key, current_presences, new_presences)
-            end
-          end
+          events << [:join, key, current_presences, new_presences]
         end
 
         leaves.each do |key, left_presences|
@@ -137,13 +162,23 @@ module Supabase
           remaining = current_presences.reject { |p| remove_refs.include?(p["presence_ref"]) }
           @state[key] = remaining
 
-          @on_leave_callbacks.each do |cb|
-            CallbackSafety.safe(@logger, "presence_leave") do
-              cb.call(key, remaining, left_presences)
-            end
-          end
+          events << [:leave, key, remaining, left_presences]
 
           @state.delete(key) if remaining.empty?
+        end
+
+        events
+      end
+
+      def fire_events(events)
+        events.each do |kind, key, current_or_remaining, new_or_left|
+          callbacks = kind == :join ? @on_join_callbacks : @on_leave_callbacks
+          label     = kind == :join ? "presence_join" : "presence_leave"
+          callbacks.each do |cb|
+            CallbackSafety.safe(@logger, label) do
+              cb.call(key, current_or_remaining, new_or_left)
+            end
+          end
         end
       end
 
