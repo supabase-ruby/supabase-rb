@@ -3,6 +3,7 @@
 require "json"
 require "uri"
 
+require_relative "callback_safety"
 require_relative "channel"
 require_relative "errors"
 require_relative "message"
@@ -77,8 +78,30 @@ module Supabase
         @intentionally_closed = false
         @send_buffer        = [] # frames queued while no socket / not connected
         @send_buffer_mutex  = Mutex.new
+        @reconnect_failed_callbacks = []
 
         attach_socket if @socket
+      end
+
+      # Register a callback fired exactly once when the background reconnect
+      # loop exhausts `max_retries` without re-establishing the socket. The
+      # callback receives the last underlying exception raised by the
+      # transport's `connect` (or `nil` if no attempt was made — currently
+      # unreachable but kept for forward-compat).
+      #
+      # Why this exists (US-003 / FR-4): supabase-py's `connect()` is a single
+      # coroutine that raises on permanent failure. The rb port runs reconnect
+      # on a background thread, so a `raise` would die unobserved. This
+      # callback is the rb-shaped equivalent — see
+      # `lib/supabase/realtime/README.md` "Realtime reconnect: отличие от
+      # supabase-py".
+      #
+      # Multiple registrations are allowed; each fires in registration order.
+      # The user block is wrapped in {CallbackSafety.safe} so a raise inside
+      # one callback never blocks the next one (consistent with US-002).
+      def on_reconnect_failed(&block)
+        @reconnect_failed_callbacks << block
+        self
       end
 
       # Plug in a transport after construction (e.g. a websocket-client-simple wrapper).
@@ -310,7 +333,9 @@ module Supabase
 
         @reconnect_thread = Thread.new do
           Thread.current.report_on_exception = false
-          retries = 0
+          retries    = 0
+          last_error = nil
+          reconnected = false
           while retries < max_tries
             retries += 1
             wait = [initial * (2**(retries - 1)), 60.0].min
@@ -319,12 +344,27 @@ module Supabase
 
             begin
               @socket.connect
+              reconnected = true
               break # on_open will fire and restart heartbeat + rejoin channels
-            rescue StandardError
+            rescue StandardError => e
+              last_error = e
               # Try again until max_retries is hit.
             end
           end
           @reconnect_thread = nil
+          fire_reconnect_failed(last_error) unless reconnected || @intentionally_closed
+        end
+      end
+
+      # Fan-out the on_reconnect_failed callback. Wrapped in CallbackSafety so
+      # an exception inside a user block does not propagate up the background
+      # reconnect thread (which has `report_on_exception = false`) and get
+      # swallowed silently.
+      def fire_reconnect_failed(last_error)
+        return if @reconnect_failed_callbacks.empty?
+
+        @reconnect_failed_callbacks.each do |cb|
+          CallbackSafety.safe(@logger, "reconnect_failed") { cb.call(last_error) }
         end
       end
 
