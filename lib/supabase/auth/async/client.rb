@@ -22,10 +22,8 @@ module Supabase
       class Client < Supabase::Auth::Client
         def initialize(url:, headers: {}, **options)
           super
-          @api = Api.new(url: @url, headers: @headers, http_client: @http_client,
-                         verify: @verify, proxy: @proxy, timeout: @timeout)
-          @admin = AdminApi.new(url: @url, headers: @headers, http_client: @http_client,
-                                verify: @verify, proxy: @proxy, timeout: @timeout)
+          @api = Api.new(url: @url, headers: @headers, http_client: @http_client, verify: @verify, proxy: @proxy, timeout: @timeout)
+          @admin = AdminApi.new(url: @url, headers: @headers, http_client: @http_client, verify: @verify, proxy: @proxy, timeout: @timeout)
         end
       end
     end

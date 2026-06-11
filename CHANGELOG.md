@@ -7,6 +7,45 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ## [Unreleased]
 
+## [3.2.0] — Async realtime teardown + breaking parity cleanup
+
+Two-themed release. The non-breaking half ports the remaining `_async`
+teardown semantics from supabase-py (US-050) and adds a live integration
+parity suite (US-051). The breaking half flushes a backlog of py-parity
+fixes that had accumulated against `3.1.1`: Functions `invoke` contract,
+Auth `sign_up` validation, Realtime channel registry, Storage path
+encoding, Client `set_auth` semantics, and three never-raised Realtime
+error aliases. Callers pinning `~> 3.1` should review the *(breaking)*
+sections before upgrading — pin to `~> 3.2` once migrated.
+
+### Added
+
+- **`Supabase::Client#remove_channel` / `#remove_all_channels` are
+  awaitable under `async: true`.** Both now dispatch the realtime
+  teardown through a shared `dispatch_realtime` helper: in sync mode
+  the call blocks as before, but under `async: true` the work runs in
+  a child `Async` task and the caller gets back an `Async::Task` they
+  can `.wait` on — the Ruby spelling of
+  `await client.remove_channel(ch)` in supabase-py
+  (`supabase/_async/client.py:231-237`). Without this, a slow
+  `phx_leave` write would stall the calling fiber for the full send
+  duration (same failure mode US-047 measured for `apply_auth`).
+  `apply_auth` is now routed through the same helper. See
+  `PARITY.md` for the full contract. (US-050.)
+- **`PARITY.md`** — new top-level doc that pins the deliberate
+  deviations from supabase-py (single `Client` with `async:` instead
+  of paired Sync/Async classes, Struct/Hash returns instead of
+  Pydantic, US-050 teardown semantics, …). Read before syncing
+  upstream so contract-level differences aren't "fixed" back to
+  Python behavior. (US-050.)
+- **Live realtime integration parity suite** under
+  `spec/integration/realtime_live_spec.rb`. Ports
+  `test_connection.py` + `test_presence.py` from supabase-py: broadcast
+  ordering, presence track/untrack, `postgres_changes` routing by
+  event, plus a US-050 follow-up checking umbrella teardown. Gated
+  on `SUPABASE_INTEGRATION_URL`, so CI without a stack stays green.
+  (US-051.)
+
 ### Changed (breaking)
 
 - **`Supabase::ClientOptions::DEFAULT_FUNCTIONS_TIMEOUT` dropped from `60` to
