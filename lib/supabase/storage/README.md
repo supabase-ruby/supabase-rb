@@ -137,3 +137,89 @@ Async do
   data   = bucket.download("user1.png")
 end
 ```
+
+## Differences from supabase-py
+
+### `timeout:`, `verify:`, `proxy:` are active constructor parameters
+
+In `supabase-py` (`storage3`) these three kwargs on `SyncStorageClient.__init__`
+are **deprecated**: passing any of them emits a `DeprecationWarning` and the
+guidance is to configure the underlying `httpx.Client` instead
+(see `storage3/_sync/client.py`).
+
+In `supabase-rb` they are **active and have well-defined effects** on the
+default Faraday session:
+
+| Kwarg     | Type            | Default | Effect                                                                    |
+|-----------|-----------------|---------|---------------------------------------------------------------------------|
+| `timeout` | `Numeric, nil`  | `20`    | Sets both `Faraday::Connection#options.timeout` and `.open_timeout` (sec).|
+| `verify`  | `Boolean`       | `true`  | Becomes `ssl: { verify: ... }` on the Faraday connection (TLS cert check).|
+| `proxy`   | `String, nil`   | `nil`   | Passed through as Faraday's `proxy:` option.                              |
+
+```ruby
+storage = Supabase::Storage::Client.new(
+  base_url: "https://project.supabase.co/storage/v1",
+  headers:  { "apikey" => key, "Authorization" => "Bearer #{token}" },
+  timeout:  30,
+  verify:   true,
+  proxy:    "http://corporate-proxy.local:3128"
+)
+```
+
+The 20-second default mirrors `storage3`'s `DEFAULT_TIMEOUT`. If you pass
+your own `http_client:` (a pre-built `Faraday::Connection`),
+`timeout`/`verify`/`proxy` are ignored — your Faraday is used as-is.
+
+### Retry — opt-in via Faraday middleware
+
+Neither `supabase-py` (`storage3`) nor `supabase-rb` retries storage
+requests automatically. In Ruby, the idiomatic way to add retries is to
+inject a Faraday connection with the [`faraday-retry`][faraday-retry]
+middleware:
+
+```ruby
+require "faraday"
+require "faraday/retry"
+require "faraday/follow_redirects"
+require "faraday/multipart"
+require "supabase/storage"
+
+http = Faraday.new(url: "https://project.supabase.co/storage/v1/") do |f|
+  f.request :retry,
+            max:            2,
+            interval:       0.5,
+            backoff_factor: 2,
+            retry_statuses: [429, 500, 502, 503, 504],
+            # Defaults cover Faraday::TimeoutError + Errno::ETIMEDOUT +
+            # Faraday::RetriableResponse — listing them explicitly keeps the
+            # set intact when we also want ConnectionFailed.
+            exceptions:     [Faraday::ConnectionFailed, Faraday::TimeoutError,
+                             Errno::ETIMEDOUT, Faraday::RetriableResponse]
+  # Keep the middleware stack the built-in Storage client wires up:
+  f.request :multipart                   # bucket.upload(...)
+  f.response :follow_redirects           # signed-URL / presigned-upload 30x flow
+  f.options.timeout      = 30
+  f.options.open_timeout = 30
+  f.adapter Faraday.default_adapter
+end
+
+storage = Supabase::Storage::Client.new(
+  base_url:    "https://project.supabase.co/storage/v1",
+  headers:     { "apikey" => key, "Authorization" => "Bearer #{token}" },
+  http_client: http
+)
+
+storage.list_buckets   # automatically retried on 5xx / network errors
+```
+
+`faraday-retry` is not a runtime dependency of `supabase-rb`; add
+`gem "faraday-retry"` to your `Gemfile` if you want this pattern.
+
+By default `faraday-retry` only retries idempotent methods (`%i[delete
+get head options put]`), which is the right policy for storage: `GET`
+list/download, `PUT` upload-overwrite, and `DELETE` remove are safe to
+replay. `POST` (`bucket.upload` to a fresh object, `create_bucket`,
+`empty_bucket`) is **not** retried by default — opt in via `methods:` if
+you understand the duplicate-write tradeoff.
+
+[faraday-retry]: https://github.com/lostisland/faraday-retry
