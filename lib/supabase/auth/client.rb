@@ -13,12 +13,24 @@ module Supabase
       STORAGE_KEY = "supabase.auth.token"
       EXPIRY_MARGIN = 10
       JWKS_TTL = 600 # 10 minutes
-      # Explicit algorithm-to-digest mapping; Python uses PyJWT's dynamic get_algorithm_by_name (F-008).
+      # Explicit asymmetric algorithm-to-digest mapping (reference table).
       ALG_TO_DIGEST = {
         "RS256" => "SHA256", "RS384" => "SHA384", "RS512" => "SHA512",
         "ES256" => "SHA256", "ES384" => "SHA384", "ES512" => "SHA512",
         "PS256" => "SHA256", "PS384" => "SHA384", "PS512" => "SHA512"
       }.freeze
+
+      # Full set of algorithms accepted by `get_claims`, matching the PyJWT
+      # defaults that supabase-py relies on via `get_algorithm_by_name`.
+      # EdDSA / Ed25519 verification additionally requires the optional
+      # `rbnacl` gem at runtime; the algorithm name is still accepted here.
+      SUPPORTED_ALGORITHMS = %w[
+        HS256 HS384 HS512
+        RS256 RS384 RS512
+        ES256 ES256K ES384 ES512
+        PS256 PS384 PS512
+        EdDSA Ed25519
+      ].freeze
 
       DEFAULT_OPTIONS = {
         auto_refresh_token: true,
@@ -59,10 +71,8 @@ module Supabase
         @refresh_token_timer = nil
         @network_retries = 0
 
-        @api = Api.new(url: @url, headers: @headers, http_client: @http_client,
-                       verify: @verify, proxy: @proxy, timeout: @timeout)
-        @admin = AdminApi.new(url: @url, headers: @headers, http_client: @http_client,
-                              verify: @verify, proxy: @proxy, timeout: @timeout)
+        @api = Api.new(url: @url, headers: @headers, http_client: @http_client, verify: @verify, proxy: @proxy, timeout: @timeout)
+        @admin = AdminApi.new(url: @url, headers: @headers, http_client: @http_client, verify: @verify, proxy: @proxy, timeout: @timeout)
         @mfa = MFAApi.new(self)
       end
 
@@ -617,10 +627,7 @@ module Supabase
         session = get_session
         raise Errors::AuthSessionMissing unless session
 
-        link_identity = _request("GET", url,
-                                 params: query,
-                                 jwt: session.access_token,
-                                 xform: ->(data) { Helpers.parse_link_identity_response(data) })
+        link_identity = _request("GET", url, params: query, jwt: session.access_token, xform: ->(data) { Helpers.parse_link_identity_response(data) })
         Types::OAuthResponse.new(provider: provider, url: link_identity.url)
       end
 
@@ -698,11 +705,13 @@ module Supabase
           return Types::ClaimsResponse.new(claims: payload, headers: header, signature: signature)
         end
 
+        # Mirror PyJWT's `get_algorithm_by_name` — reject unknown algs with the
+        # same message py would raise.
+        raise Errors::AuthInvalidJwtError, "Algorithm not supported" unless SUPPORTED_ALGORITHMS.include?(header["alg"])
+
         # Asymmetric JWT - verify via JWKS using the jwt gem's decode
         jwk_data = _fetch_jwks(header["kid"], jwks || { "keys" => [] })
         jwk_set = JWT::JWK::Set.new({ "keys" => [jwk_data] })
-
-        raise Errors::AuthInvalidJwtError, "Unsupported algorithm: #{header["alg"]}" unless ALG_TO_DIGEST[header["alg"]]
 
         begin
           JWT.decode(token, nil, true, { algorithms: [header["alg"]], jwks: jwk_set })

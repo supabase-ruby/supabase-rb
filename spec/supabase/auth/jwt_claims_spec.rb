@@ -245,7 +245,7 @@ RSpec.describe "JWT Claims & JWKS" do
 
         expect {
           client.get_claims(jwt: token, jwks: jwks)
-        }.to raise_error(Supabase::Auth::Errors::AuthInvalidJwtError, /Unsupported algorithm/)
+        }.to raise_error(Supabase::Auth::Errors::AuthInvalidJwtError, "Algorithm not supported")
       end
     end
 

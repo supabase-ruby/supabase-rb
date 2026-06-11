@@ -148,7 +148,8 @@ dedicated class gives callers a precise `rescue` target.
 
 ### Explicit JWT algorithm → digest mapping
 
-`Supabase::Auth::Client::ALG_TO_DIGEST` is a frozen lookup table:
+`Supabase::Auth::Client::ALG_TO_DIGEST` is a frozen reference table of the
+asymmetric algorithms and their digests:
 
 ```ruby
 ALG_TO_DIGEST = {
@@ -158,9 +159,14 @@ ALG_TO_DIGEST = {
 }.freeze
 ```
 
-Python resolves algorithms dynamically via `PyJWT.get_algorithm_by_name`.
-The Ruby table makes the supported set readable in one place and fails fast
-(`AuthInvalidJwtError`) on unsupported `alg` values.
+The actual *acceptance* check in `get_claims` runs against the broader
+`SUPPORTED_ALGORITHMS` constant, which mirrors PyJWT's default algorithm set
+(`HS256/384/512`, `RS*`, `ES*` + `ES256K`, `PS*`, `EdDSA`/`Ed25519`). Symmetric
+tokens (`HS256` or any token without a `kid` header) fall back to
+`get_user(token)` for verification — same as supabase-py. Unknown `alg`
+values raise `AuthInvalidJwtError("Algorithm not supported")`, matching the
+PyJWT `NotImplementedError` message verbatim. EdDSA verification additionally
+requires the optional `rbnacl` gem at runtime.
 
 ## Development
 

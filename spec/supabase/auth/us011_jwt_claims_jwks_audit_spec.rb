@@ -130,7 +130,7 @@ RSpec.describe "US-011: Audit JWT Claims & JWKS" do
       end
 
       expect { client.get_claims(jwt: token) }.to raise_error(
-        Supabase::Auth::Errors::AuthInvalidJwtError, /Unsupported algorithm/
+        Supabase::Auth::Errors::AuthInvalidJwtError, "Algorithm not supported"
       )
     end
   end
