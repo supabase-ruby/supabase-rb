@@ -39,7 +39,7 @@ module Supabase
         flow_type: "implicit"
       }.freeze
 
-      attr_reader :url, :headers, :admin, :mfa
+      attr_reader :url, :headers, :admin, :mfa, :logger
 
       # @param url [String] GoTrue server URL
       # @param headers [Hash] HTTP headers to include with every request
@@ -49,6 +49,8 @@ module Supabase
       # @option options [String] :flow_type ("implicit") OAuth flow type ("implicit" or "pkce")
       # @option options [SupportedStorage] :storage custom storage backend
       # @option options [Faraday::Connection] :http_client custom HTTP client
+      # @option options [#warn] :logger optional logger; if nil, auto-refresh
+      #   failures fall back to Kernel#warn ($stderr).
       def initialize(url:, headers: {}, **options)
         opts = DEFAULT_OPTIONS.merge(options)
         @url = url
@@ -63,6 +65,7 @@ module Supabase
         @verify = opts.fetch(:verify, true)
         @proxy = opts[:proxy]
         @timeout = opts[:timeout]
+        @logger = opts[:logger]
 
         @current_session = nil
         @jwks = { "keys" => [] }
@@ -818,12 +821,14 @@ module Supabase
               _call_refresh_token(session.refresh_token)
               @network_retries = 0
             end
-          rescue Errors::AuthRetryableError
+          rescue Errors::AuthRetryableError => e
+            _log_refresh_error("auto_refresh", e)
             if @network_retries < Constants::MAX_RETRIES
               _start_auto_refresh_token(200 * (Constants::RETRY_INTERVAL ** (@network_retries - 1)))
             end
-          rescue StandardError
-            # Swallow other errors
+          rescue StandardError => e
+            # Non-retryable failure: log once, do NOT reschedule (no infinite loop).
+            _log_refresh_error("auto_refresh", e)
           end
         end
         @refresh_token_timer.start
@@ -850,7 +855,8 @@ module Supabase
             begin
               _call_refresh_token(refresh_token)
               @network_retries = 0
-            rescue Errors::AuthRetryableError
+            rescue Errors::AuthRetryableError => e
+              _log_refresh_error("recover_and_refresh", e)
               if @network_retries < Constants::MAX_RETRIES
                 if @refresh_token_timer
                   @refresh_token_timer.cancel
@@ -861,8 +867,9 @@ module Supabase
                 @refresh_token_timer.start
                 return
               end
-            rescue StandardError
-              # Swallow other errors
+            rescue StandardError => e
+              # Non-retryable failure: log once, do NOT reschedule (no infinite loop).
+              _log_refresh_error("recover_and_refresh", e)
             end
           end
           _remove_session
@@ -892,6 +899,21 @@ module Supabase
                         body: { refresh_token: refresh_token },
                         params: { "grant_type" => "refresh_token" })
         Helpers.parse_auth_response(data)
+      end
+
+      # Log an auto-refresh failure. Used by both `_start_auto_refresh_token`
+      # and `_recover_and_refresh` so the diverged-from-py contract
+      # ("any refresh error is logged with class + message") is enforced in
+      # one place. Falls back to Kernel#warn when no logger is injected.
+      def _log_refresh_error(context, error)
+        msg = "[Supabase::Auth] refresh failed in #{context}: #{error.class}: #{error.message}"
+        if @logger.respond_to?(:warn)
+          @logger.warn(msg)
+        else
+          Kernel.warn(msg)
+        end
+      rescue StandardError
+        # Never let logging itself break the refresh loop.
       end
 
       def _list_factors
