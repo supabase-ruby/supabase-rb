@@ -447,4 +447,77 @@ RSpec.describe Supabase::Storage::FileApi do
       expect(result.key).to eq("avatars/x.png")
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # US-013 — light validation of `transform:` options.
+  #
+  # Mirrors storage3's `TransformOptions` TypedDict (height, width, resize,
+  # format, quality). Ruby has no compile-time type check for kwargs, so we
+  # emit a one-line `Kernel#warn` to flag typos/stale keys. The unknown key
+  # still flows through to the wire (the render endpoint may know it) — the
+  # warning is purely advisory.
+  # ---------------------------------------------------------------------------
+  describe "transform: validation (US-013)" do
+    let(:known_transform) { { width: 100, height: 200, resize: "cover", format: "avif", quality: 80 } }
+
+    describe "#download" do
+      it "warns on unknown transform keys (e.g. :hieght typo) but still issues the request" do
+        stub = stub_request(:get, "#{base}/render/image/authenticated/avatars/x.png")
+               .with(query: { "hieght" => "200" })
+               .to_return(status: 200, body: "bytes")
+
+        expect { bucket.download("x.png", transform: { hieght: 200 }) }
+          .to output(%r{\[Supabase::Storage\] unknown transform option\(s\): :hieght}).to_stderr
+
+        expect(stub).to have_been_requested
+      end
+
+      it "stays silent when every transform key is known" do
+        stub_request(:get, "#{base}/render/image/authenticated/avatars/x.png")
+          .with(query: known_transform.transform_keys(&:to_s).transform_values(&:to_s))
+          .to_return(status: 200, body: "bytes")
+
+        expect { bucket.download("x.png", transform: known_transform) }.not_to output.to_stderr
+      end
+
+      it "treats string and symbol keys equivalently when validating" do
+        stub_request(:get, "#{base}/render/image/authenticated/avatars/x.png")
+          .with(query: { "width" => "100", "height" => "200" })
+          .to_return(status: 200, body: "bytes")
+
+        expect { bucket.download("x.png", transform: { "width" => 100, "height" => 200 }) }
+          .not_to output.to_stderr
+      end
+    end
+
+    describe "#get_public_url" do
+      it "warns on unknown transform keys (URL-builder path — no HTTP call)" do
+        expect { bucket.get_public_url("x.png", transform: { width: 100, foo: "bar" }) }
+          .to output(%r{\[Supabase::Storage\] unknown transform option\(s\): :foo}).to_stderr
+      end
+
+      it "stays silent for known keys only" do
+        expect { bucket.get_public_url("x.png", transform: { width: 100, height: 200 }) }
+          .not_to output.to_stderr
+      end
+    end
+
+    describe "#create_signed_url" do
+      it "warns on unknown transform keys before POSTing" do
+        stub_request(:post, "#{base}/object/sign/avatars/x.png")
+          .to_return(status: 200, body: JSON.generate("signedURL" => "/object/sign/avatars/x.png?token=t"))
+
+        expect { bucket.create_signed_url("x.png", expires_in: 60, transform: { width: 100, foo: "bar" }) }
+          .to output(%r{\[Supabase::Storage\] unknown transform option\(s\): :foo}).to_stderr
+      end
+
+      it "stays silent for known keys only" do
+        stub_request(:post, "#{base}/object/sign/avatars/x.png")
+          .to_return(status: 200, body: JSON.generate("signedURL" => "/object/sign/avatars/x.png?token=t"))
+
+        expect { bucket.create_signed_url("x.png", expires_in: 60, transform: known_transform) }
+          .not_to output.to_stderr
+      end
+    end
+  end
 end

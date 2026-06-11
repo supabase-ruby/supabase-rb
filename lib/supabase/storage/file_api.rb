@@ -21,6 +21,12 @@ module Supabase
 
       attr_reader :id
 
+      # Mirrors storage3's `TypedDict` `TransformOptions` (height, width, resize,
+      # format, quality). PyJWT-style: we don't error on unknown keys at runtime —
+      # the user-facing API quietly drops them — but Ruby has no TypedDict, so
+      # we warn through `Kernel#warn` to flag typos like `:hieght` or stale keys.
+      KNOWN_TRANSFORM_KEYS = %i[height width resize format quality].freeze
+
       def initialize(id, base_url, headers, session)
         @id       = id
         @base_url = base_url.end_with?("/") ? base_url : "#{base_url}/"
@@ -59,6 +65,7 @@ module Supabase
       # on top (merged after transform — explicit query_params win on conflict).
       # Mirrors supabase-py's DownloadOptions / TransformOptions split.
       def download(path, transform: nil, query_params: nil)
+        warn_unknown_transform_keys(transform) if transform
         render_path = transform ? %w[render image authenticated] : %w[object]
         query = {}
         query.merge!(transform.transform_keys(&:to_s).transform_values(&:to_s)) if transform
@@ -142,6 +149,7 @@ module Supabase
       #   original filename, a String to override the filename, or nil to leave inline
       # @return [Hash] { "signedURL" => "...", "signedUrl" => "..." }
       def create_signed_url(path, expires_in:, download: nil, transform: nil)
+        warn_unknown_transform_keys(transform) if transform
         json = { "expiresIn" => expires_in.to_s }
         download_query = {}
         if download
@@ -176,6 +184,7 @@ module Supabase
       end
 
       def get_public_url(path, download: nil, transform: nil)
+        warn_unknown_transform_keys(transform) if transform
         download_query = {}
         if download
           download_query["download"] = download == true ? "" : download
@@ -211,6 +220,23 @@ module Supabase
       end
 
       private
+
+      # Emit a one-line `Kernel#warn` per call when `transform:` carries any key
+      # outside {KNOWN_TRANSFORM_KEYS}. We do not raise: the key is still passed
+      # through to the storage render endpoint as a query param, so a typo or
+      # server-only flag remains observable (just no longer silent).
+      def warn_unknown_transform_keys(transform)
+        return unless transform.respond_to?(:keys)
+
+        unknown = transform.keys.map(&:to_sym) - KNOWN_TRANSFORM_KEYS
+        return if unknown.empty?
+
+        Kernel.warn(
+          "[Supabase::Storage] unknown transform option(s): " \
+          "#{unknown.map(&:inspect).join(', ')}. " \
+          "Known keys: #{KNOWN_TRANSFORM_KEYS.map(&:inspect).join(', ')}."
+        )
+      end
 
       def upload_or_update(method, path, file, content_type:, cache_control:, upsert:, metadata:, headers:, omit_upsert: false)
         parts = Utils.relative_path_to_parts(path)
