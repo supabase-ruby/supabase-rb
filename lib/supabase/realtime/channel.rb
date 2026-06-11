@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "callback_safety"
 require_relative "errors"
 require_relative "message"
 require_relative "presence"
@@ -25,7 +26,7 @@ module Supabase
         @socket  = socket
         @state   = Types::ChannelStates::CLOSED
         @joined_once = false
-        @presence = Presence.new
+        @presence = Presence.new(logger: logger)
 
         @broadcast_callbacks        = []   # [{ event:, callback: }]
         @postgres_changes_callbacks = []   # [{ event:, schema:, table:, filter:, callback: }]
@@ -48,6 +49,16 @@ module Supabase
           .receive(Types::AckStatus::OK)      { |p| on_join_ok(p) }
           .receive(Types::AckStatus::ERROR)   { |p| on_join_error(p) }
           .receive(Types::AckStatus::TIMEOUT) { |_| on_join_timeout }
+      end
+
+      # Logger used by {CallbackSafety} when a user callback raises. Resolved
+      # lazily from the realtime client (`@socket` in this class is the
+      # {Realtime::Client}, which exposes its injected logger via
+      # `Client#logger`). When the underlying transport doesn't carry a logger
+      # (e.g. tests that pass a bare {TestSocket} as `socket:`), `safe` falls
+      # through to `Kernel#warn`.
+      def logger
+        @socket.respond_to?(:logger) ? @socket.logger : nil
       end
 
       # ----- State predicates -----
@@ -242,13 +253,19 @@ module Supabase
         when Types::ChannelEvents::PRESENCE_DIFF
           @presence.sync_diff(message.payload)
         when Types::ChannelEvents::SYSTEM
-          @system_callbacks.each { |cb| cb.call(message.payload) }
+          @system_callbacks.each do |cb|
+            CallbackSafety.safe(logger, "system") { cb.call(message.payload) }
+          end
         when Types::ChannelEvents::CLOSE
           @state = Types::ChannelStates::CLOSED
-          @close_callbacks.each { |cb| cb.call(message.payload) }
+          @close_callbacks.each do |cb|
+            CallbackSafety.safe(logger, "phx_close") { cb.call(message.payload) }
+          end
         when Types::ChannelEvents::ERROR
           @state = Types::ChannelStates::ERRORED
-          @error_callbacks.each { |cb| cb.call(message.payload) }
+          @error_callbacks.each do |cb|
+            CallbackSafety.safe(logger, "phx_error") { cb.call(message.payload) }
+          end
         end
 
         true
@@ -373,14 +390,20 @@ module Supabase
           # filtering remains the sole gate.
           next if binding[:id] && ids.is_a?(Array) && !ids.include?(binding[:id])
 
-          binding[:callback].call(message.payload)
+          CallbackSafety.safe(logger, "postgres_changes:#{binding[:event]}") do
+            binding[:callback].call(message.payload)
+          end
         end
       end
 
       def dispatch_broadcast(message)
         event = message.payload["event"]
         @broadcast_callbacks.each do |binding|
-          binding[:callback].call(message.payload) if binding[:event] == event
+          next unless binding[:event] == event
+
+          CallbackSafety.safe(logger, "broadcast:#{event}") do
+            binding[:callback].call(message.payload)
+          end
         end
       end
 
@@ -417,7 +440,7 @@ module Supabase
             err = Errors::RealtimeError.new(
               "mismatch between server and client bindings for postgres changes"
             )
-            @subscribe_callback&.call(Types::SubscribeStates::CHANNEL_ERROR, err)
+            fire_subscribe_callback(Types::SubscribeStates::CHANNEL_ERROR, err)
             return
           end
 
@@ -427,19 +450,27 @@ module Supabase
         @state = Types::ChannelStates::JOINED
         @rejoin_timer.reset
         flush_push_buffer
-        @subscribe_callback&.call(Types::SubscribeStates::SUBSCRIBED, nil)
+        fire_subscribe_callback(Types::SubscribeStates::SUBSCRIBED, nil)
       end
 
       def on_join_error(payload)
         @state = Types::ChannelStates::ERRORED
         @rejoin_timer.schedule_timeout
-        @subscribe_callback&.call(Types::SubscribeStates::CHANNEL_ERROR, payload)
+        fire_subscribe_callback(Types::SubscribeStates::CHANNEL_ERROR, payload)
       end
 
       def on_join_timeout
         @state = Types::ChannelStates::ERRORED
         @rejoin_timer.schedule_timeout
-        @subscribe_callback&.call(Types::SubscribeStates::TIMED_OUT, nil)
+        fire_subscribe_callback(Types::SubscribeStates::TIMED_OUT, nil)
+      end
+
+      def fire_subscribe_callback(state, error_or_payload)
+        return unless @subscribe_callback
+
+        CallbackSafety.safe(logger, "subscribe:#{state}") do
+          @subscribe_callback.call(state, error_or_payload)
+        end
       end
 
       def flush_push_buffer
@@ -450,7 +481,9 @@ module Supabase
 
       def on_leave_ack
         @state = Types::ChannelStates::CLOSED
-        @close_callbacks.each { |cb| cb.call({}) }
+        @close_callbacks.each do |cb|
+          CallbackSafety.safe(logger, "phx_close") { cb.call({}) }
+        end
       end
     end
   end

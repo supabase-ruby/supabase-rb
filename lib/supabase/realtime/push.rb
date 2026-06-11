@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "callback_safety"
 require_relative "types"
 
 module Supabase
@@ -32,7 +33,7 @@ module Supabase
       def receive(status, &block)
         if @received_status == status
           # Reply already arrived before this handler was attached — fire immediately.
-          block.call(@received_payload)
+          CallbackSafety.safe(logger, "push_receive:#{status}") { block.call(@received_payload) }
         else
           @handlers[status] << block
         end
@@ -50,7 +51,9 @@ module Supabase
           @received_payload = payload
         end
         cancel_timeout
-        @handlers[status].each { |h| h.call(payload) }
+        @handlers[status].each do |h|
+          CallbackSafety.safe(logger, "push_receive:#{status}") { h.call(payload) }
+        end
       end
 
       # Schedule a TIMEOUT resolution if no reply arrives within `seconds`.
@@ -84,6 +87,12 @@ module Supabase
           @timeout_thread = nil
           thread&.kill if thread && thread != Thread.current
         end
+      end
+
+      private
+
+      def logger
+        @channel.respond_to?(:logger) ? @channel.logger : nil
       end
     end
   end

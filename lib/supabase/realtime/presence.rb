@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "callback_safety"
+
 module Supabase
   module Realtime
     # Tracks presence state for one channel and implements the Phoenix Presence
@@ -11,11 +13,12 @@ module Supabase
     class Presence
       attr_reader :state
 
-      def initialize
+      def initialize(logger: nil)
         @state = {}
         @on_sync_callbacks = []
         @on_join_callbacks = []
         @on_leave_callbacks = []
+        @logger = logger
       end
 
       # First snapshot after joining: diff against the (possibly empty) local
@@ -42,7 +45,7 @@ module Supabase
         end
 
         sync_diff_internal(joins, leaves)
-        @on_sync_callbacks.each(&:call)
+        fire_sync_callbacks
         @state
       end
 
@@ -52,7 +55,7 @@ module Supabase
         joins = self.class.transform_state(raw_diff["joins"] || {})
         leaves = self.class.transform_state(raw_diff["leaves"] || {})
         sync_diff_internal(joins, leaves)
-        @on_sync_callbacks.each(&:call)
+        fire_sync_callbacks
         @state
       end
 
@@ -119,7 +122,11 @@ module Supabase
             @state[key] = keep_from_current + @state[key]
           end
 
-          @on_join_callbacks.each { |cb| cb.call(key, current_presences, new_presences) }
+          @on_join_callbacks.each do |cb|
+            CallbackSafety.safe(@logger, "presence_join") do
+              cb.call(key, current_presences, new_presences)
+            end
+          end
         end
 
         leaves.each do |key, left_presences|
@@ -130,9 +137,19 @@ module Supabase
           remaining = current_presences.reject { |p| remove_refs.include?(p["presence_ref"]) }
           @state[key] = remaining
 
-          @on_leave_callbacks.each { |cb| cb.call(key, remaining, left_presences) }
+          @on_leave_callbacks.each do |cb|
+            CallbackSafety.safe(@logger, "presence_leave") do
+              cb.call(key, remaining, left_presences)
+            end
+          end
 
           @state.delete(key) if remaining.empty?
+        end
+      end
+
+      def fire_sync_callbacks
+        @on_sync_callbacks.each do |cb|
+          CallbackSafety.safe(@logger, "presence_sync") { cb.call }
         end
       end
     end

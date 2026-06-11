@@ -31,7 +31,8 @@ module Supabase
     #   channel.subscribe
     class Client
       attr_reader :url, :params, :access_token, :channels, :socket, :timeout,
-                  :heartbeat_interval, :auto_reconnect, :max_retries, :initial_backoff
+                  :heartbeat_interval, :auto_reconnect, :max_retries, :initial_backoff,
+                  :logger
 
       # @param url    [String] WebSocket endpoint (ws:// or wss://). Plain http(s) are upgraded.
       # @param params [Hash]   query-string params merged onto the URL (e.g. apikey/access_token)
@@ -44,10 +45,15 @@ module Supabase
       # @param max_retries [Integer] maximum reconnect attempts before giving up
       # @param initial_backoff [Numeric] seconds of delay before the first reconnect attempt;
       #   doubles each attempt up to a 60s cap (matches supabase-py)
+      # @param logger [#warn, nil] optional logger for non-fatal events. Used by
+      #   {CallbackSafety} to record exceptions raised inside user-supplied
+      #   channel/presence/push callbacks without killing the read-thread
+      #   (US-002). Falls back to `Kernel#warn` ($stderr) when nil.
       def initialize(url:, params: {}, transport: nil, socket: nil,
                      timeout: Types::DEFAULT_TIMEOUT_SECONDS,
                      heartbeat_interval: Types::DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
-                     auto_reconnect: true, max_retries: 5, initial_backoff: 1.0)
+                     auto_reconnect: true, max_retries: 5, initial_backoff: 1.0,
+                     logger: nil)
         unless Transformers.is_ws_url(url)
           raise ArgumentError,
                 "Invalid Realtime URL #{url.inspect}: expected ws://, wss://, http://, or https://"
@@ -65,6 +71,7 @@ module Supabase
         @auto_reconnect     = auto_reconnect
         @max_retries        = max_retries
         @initial_backoff    = initial_backoff
+        @logger             = logger
         @heartbeat_thread   = nil
         @reconnect_thread   = nil
         @intentionally_closed = false
