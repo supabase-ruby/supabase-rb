@@ -25,8 +25,11 @@ require "supabase/realtime"
 #
 # The postgres_changes example additionally needs a `public.todos` table
 # (description text, is_completed bool) with realtime enabled and open signup —
-# same assumptions as the Python test. It self-skips with a reason when the
-# stack doesn't provide them, so the rest of the suite still runs.
+# same assumptions as the Python test. Provision it with
+# spec/integration/realtime_seed.sql (see its header; note the realtime
+# container must be restarted if the publication changes while the stack is
+# running). It self-skips with a reason when the stack doesn't provide them,
+# so the rest of the suite still runs.
 RSpec.describe "Realtime live integration (US-051)" do
   STEP_TIMEOUT_SECONDS = 10
 
