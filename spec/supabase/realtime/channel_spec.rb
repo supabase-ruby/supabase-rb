@@ -248,6 +248,39 @@ RSpec.describe Supabase::Realtime::Channel do
     end
   end
 
+  describe "push timeout while buffered (py parity: channel.py:318-323)" do
+    it "resolves a push buffered on a never-joining channel with TIMEOUT instead of hanging" do
+      channel.subscribe # JOINING — the join is never acked
+      statuses = []
+      push = channel.push_event("custom_event", { "k" => "v" }, timeout: 0.05)
+      push.receive(Supabase::Realtime::Types::AckStatus::TIMEOUT) { |_| statuses << :timeout }
+
+      sleep 0.3
+      expect(push.received_status).to eq(Supabase::Realtime::Types::AckStatus::TIMEOUT)
+      expect(statuses).to eq([:timeout])
+    end
+
+    it "does not put a push that timed out while buffered on the wire when the join finally acks" do
+      channel.subscribe
+      channel.push_event("custom_event", { "k" => "v" }, timeout: 0.05)
+      sleep 0.3
+
+      ack_join
+      expect(channel).to be_joined
+      expect(socket.sent_events).not_to include("custom_event")
+    end
+
+    it "still delivers a buffered push that flushes before its timeout" do
+      channel.subscribe
+      push = channel.push_event("custom_event", { "k" => "v" }, timeout: 5)
+      expect(socket.sent_events).to eq(["phx_join"])
+
+      ack_join
+      expect(socket.sent_events).to include("custom_event")
+      expect(push.received_status).to be_nil # still awaiting the server reply
+    end
+  end
+
   describe "phx_close / phx_error inbound" do
     before { channel.subscribe; ack_join }
 

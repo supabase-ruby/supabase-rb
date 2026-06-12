@@ -36,7 +36,9 @@ module Supabase
                   :logger
 
       # @param url    [String] WebSocket endpoint (ws:// or wss://). Plain http(s) are upgraded.
-      # @param params [Hash]   query-string params merged onto the URL (e.g. apikey/access_token)
+      # @param params [Hash]   query-string params merged onto the URL (e.g. apikey).
+      #   `access_token` is accepted here but is NOT serialized into the URL —
+      #   it is carried in join payloads / access_token pushes instead.
       # @param transport [Socket, nil] inject your own transport. If nil, the production
       #   websocket-client-simple adapter is constructed from URL+params.
       # @param socket [Socket, nil] deprecated alias for `transport:` — kept for back compat.
@@ -75,6 +77,7 @@ module Supabase
         @logger             = logger
         @heartbeat_thread   = nil
         @reconnect_thread   = nil
+        @connecting         = false
         @intentionally_closed = false
         @send_buffer        = [] # frames queued while no socket / not connected
         @send_buffer_mutex  = Mutex.new
@@ -111,14 +114,49 @@ module Supabase
         self
       end
 
+      # Establish the WebSocket connection. Mirrors supabase-py's `connect()`
+      # (client.py:141-193): synchronous transport failures are retried with
+      # exponential backoff — `initial_backoff * 2^(n-1)` seconds, capped at
+      # 60s — for up to `max_retries` total attempts, then the last error is
+      # re-raised to the caller. With `auto_reconnect: false` the first
+      # failure raises immediately, as in py.
+      #
+      # Only failures that `Socket#connect` raises *synchronously* are retried
+      # here. Transports that report failure asynchronously (on_error/on_close
+      # after connect returns) are recovered by the background reconnect loop
+      # (schedule_reconnect → on_reconnect_failed) — same contract, different
+      # signal path. A concurrent `disconnect` aborts the retry loop quietly.
       def connect
         unless @socket
           @socket = build_default_transport
           attach_socket
         end
 
+        # Idempotent: if a connection is already open or in flight, don't kick
+        # off a second transport.connect. A duplicate connect can produce a
+        # second on_open, which would fire rejoin_channels twice and send a
+        # duplicate join per channel (the server then phx_closes the extra one).
+        # This matters because Channel#subscribe calls connect when the socket
+        # isn't open yet, and the caller may have already called connect.
+        return self if connected? || @connecting
+
         @intentionally_closed = false
-        @socket.connect
+        attempts = 0
+        begin
+          @connecting = true
+          @socket.connect
+        rescue StandardError
+          # Reset the in-flight flag so the retry (and any later connect call)
+          # isn't short-circuited by the idempotency guard above.
+          @connecting = false
+          attempts += 1
+          raise if !@auto_reconnect || attempts >= @max_retries
+
+          sleep [@initial_backoff * (2**(attempts - 1)), 60.0].min
+          return self if @intentionally_closed
+
+          retry
+        end
         self
       end
 
@@ -161,7 +199,24 @@ module Supabase
       def remove_channel(channel)
         channel.unsubscribe
         @channels.delete(channel)
-        @socket&.close if @channels.empty?
+        # Close the socket once the registry empties — mirrors supabase-py's
+        # `remove_channel` (which calls `self.close()` when `len(channels) == 0`).
+        # Use the intentional-close path (`disconnect`), not a bare
+        # `@socket.close`: the latter fires on_close → schedule_reconnect and the
+        # socket would immediately come back up.
+        disconnect if @channels.empty?
+      end
+
+      # Internal: drop a channel from the registry without unsubscribing it.
+      # Called by {Channel#on_close} when a channel reaches CLOSED on its own
+      # (leave-ack or a server phx_close), mirroring supabase-py's
+      # `socket._remove_channel` (client.py:294-295). Distinct from the public
+      # {#remove_channel}, which actively unsubscribes. Removes the specific
+      # channel object (topics can repeat in the flat registry). Does not close
+      # the socket — that auto-close only happens via the explicit
+      # remove_channel/remove_all_channels paths, matching py.
+      def _remove_channel(channel)
+        @channels.delete(channel)
       end
 
       # Unsubscribe every tracked channel and clear the registry. Iterates over a
@@ -172,6 +227,9 @@ module Supabase
       def remove_all_channels
         @channels.dup.each { |ch| ch.unsubscribe }
         @channels.clear
+        # supabase-py's remove_all_channels unsubscribes every channel and then
+        # `await self.close()`. Match that — intentional close, no reconnect.
+        disconnect
         self
       end
 
@@ -180,30 +238,19 @@ module Supabase
       #
       # Safe to call before `connect`: the token is always written to
       # `@access_token` / `@params` so the next subscribe picks it up via
-      # `Channel#inject_postgres_changes_bindings`. The ACCESS_TOKEN frame fan-out
-      # only runs once the socket is actually connected.
+      # `Channel#inject_postgres_changes_bindings`.
+      #
+      # The fan-out mirrors supabase-py (client.py:333-337): for every joined
+      # channel, `channel.push(access_token, {access_token: token})`. Routing
+      # through the channel's push path (rather than sending a raw frame only
+      # when `connected?`) means a rotation issued while the socket is briefly
+      # offline is buffered and replayed on reconnect, not silently dropped.
       def set_auth(token)
         @access_token = token
         @params["access_token"] = token if @params.is_a?(Hash)
 
-        if connected?
-          @channels.each do |channel|
-            next unless channel.joined?
-
-            msg = Message.new(
-              event:   Types::ChannelEvents::ACCESS_TOKEN,
-              topic:   channel.topic,
-              payload: { "access_token" => token },
-              ref:     next_ref
-            )
-            @socket.send(JSON.generate(
-              "event"    => msg.event,
-              "topic"    => msg.topic,
-              "payload"  => msg.payload,
-              "ref"      => msg.ref,
-              "join_ref" => nil
-            ))
-          end
+        @channels.each do |channel|
+          channel.push_access_token(token) if channel.joined?
         end
       end
 
@@ -265,9 +312,25 @@ module Supabase
         @socket.on_message { |raw| handle_inbound(raw) }
         @socket.on_open    { handle_socket_open }
         @socket.on_close   { handle_socket_close }
+        @socket.on_error   { |err| handle_socket_error(err) }
+      end
+
+      # A transport-level error (failed write, protocol error) means the
+      # connection is effectively dead. supabase-py funnels both heartbeat-send
+      # failures and socket errors into `_on_connect_error` → `_reconnect`
+      # (client.py:212-221). Some transports surface an abrupt drop only as an
+      # error and never fire on_close, so wiring this here is what keeps a
+      # half-dead connection from silently never reconnecting. Honors the same
+      # intentional-close / auto_reconnect gating as handle_socket_close.
+      def handle_socket_error(_err = nil)
+        stop_heartbeat
+        return if @intentionally_closed || !@auto_reconnect
+
+        schedule_reconnect
       end
 
       def handle_socket_open
+        @connecting = false
         flush_send_buffer
         start_heartbeat
         rejoin_channels
@@ -291,6 +354,7 @@ module Supabase
       end
 
       def handle_socket_close
+        @connecting = false
         stop_heartbeat
         return if @intentionally_closed || !@auto_reconnect
 
@@ -313,7 +377,14 @@ module Supabase
             begin
               send_heartbeat
             rescue StandardError
-              # Swallow — a transient send error shouldn't kill the heartbeat loop.
+              # A heartbeat write failure means the connection is dead. Mirror
+              # supabase-py (client.py:270-271), which routes the failure into
+              # the reconnect sequence rather than swallowing it — otherwise a
+              # half-dead socket that errors on write but never fires on_close
+              # would never recover. Break the loop; handle_socket_error
+              # (re)starts heartbeat after a successful reconnect.
+              handle_socket_error
+              break
             end
           end
         end
@@ -404,8 +475,18 @@ module Supabase
         normalized.sub!(%r{\Ahttps://}, "wss://")
         normalized = "#{normalized}/websocket" unless normalized.end_with?("/websocket")
 
-        query = { "vsn" => Types::VSN }.merge(params.transform_keys(&:to_s)) if params && !params.empty?
-        query ||= { "vsn" => Types::VSN }
+        # The user JWT must never appear in the URL: supabase-py puts only
+        # `apikey` in the query string (client.py:78-79) and carries the access
+        # token in join payloads / access_token pushes. URLs are logged by
+        # proxies and servers, so serializing the token here would leak it.
+        # `access_token` stays available via @access_token for joins/set_auth.
+        query = { "vsn" => Types::VSN }
+        if params && !params.empty?
+          url_params = params.transform_keys(&:to_s)
+          url_params.delete("access_token")
+          url_params.compact!
+          query = query.merge(url_params)
+        end
 
         separator = normalized.include?("?") ? "&" : "?"
         "#{normalized}#{separator}#{URI.encode_www_form(query)}"

@@ -20,6 +20,27 @@ RSpec.describe Supabase::Realtime::Client do
       expect(client.url).to include("apikey=anon")
     end
 
+    it "never serializes access_token into the URL (py parity: apikey only; URLs get logged)" do
+      c = described_class.new(
+        url: "wss://x.supabase.co/realtime/v1",
+        params: { apikey: "anon", access_token: "user-jwt" },
+        socket: socket
+      )
+      expect(c.url).not_to include("user-jwt")
+      expect(c.url).not_to include("access_token")
+      expect(c.url).to include("apikey=anon")
+      expect(c.access_token).to eq("user-jwt") # still available for joins/set_auth
+    end
+
+    it "drops nil params from the URL (no empty access_token=-style entries)" do
+      c = described_class.new(
+        url: "wss://x.supabase.co/realtime/v1",
+        params: { "apikey" => "anon", "log_level" => nil },
+        socket: socket
+      )
+      expect(c.url).not_to include("log_level")
+    end
+
     it "upgrades http(s) URLs to ws(s) so callers can paste the project URL as-is" do
       c = described_class.new(url: "https://x.supabase.co/realtime/v1", socket: socket)
       expect(c.url).to start_with("wss://")

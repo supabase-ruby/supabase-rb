@@ -11,9 +11,11 @@ require "stringio"
 # failure. The rb port runs reconnect on a thread (no caller to raise to), so
 # the same contract is delivered through `Client#on_reconnect_failed`.
 #
-# Q2 (explicit connect to an unavailable server) is settled by py-parity:
-# `client.connect` propagates the underlying transport exception immediately
-# — no silent success, no internal retry loop on the explicit call.
+# Q2 (explicit connect to an unavailable server) is settled by py-parity
+# (D5 fix): `client.connect` retries synchronous transport failures with
+# exponential backoff up to `max_retries`, then re-raises the last error —
+# no silent success. With `auto_reconnect: false` the first failure raises
+# immediately. See spec/supabase/realtime/connect_retry_spec.rb.
 RSpec.describe "US-003: terminal reconnect failure is observable" do
   # TestSocket variant: fire_close pretends the server yanked the link, and
   # `make_connect_raise!` flips `connect` so every subsequent attempt fails

@@ -85,26 +85,31 @@ module Supabase
         @state = Types::ChannelStates::JOINING
 
         inject_postgres_changes_bindings
-        @join_push.instance_variable_set(:@ref, @socket&.next_ref)
-        # Make subscribe a one-call entry point: if the caller hasn't already
-        # connected the underlying transport, open it now so the join frame
-        # actually reaches the wire instead of being held forever in the
-        # Client#send_buffer. Matches supabase-py's `channel.subscribe()` ergonomics.
-        @socket.connect if @socket && !@socket.connected?
-        send_push(@join_push, register_pending: true)
+        # Make subscribe a one-call entry point. If the socket is already open,
+        # send the join now. If it isn't, just (idempotently) open it — the
+        # client's rejoin_channels fires on socket-open and (re)sends the join
+        # exactly once. The previous version sent/buffered the join here AND let
+        # rejoin_channels re-send it on open, so a subscribe-before-open issued
+        # a DUPLICATE join; the server phx_closed the extra one, which (with the
+        # registry-removal fix) tore the channel down and broke delivery. Caught
+        # by the live integration suite, not the mocked specs.
+        if @socket && !@socket.connected?
+          @socket.connect
+        else
+          send_join_push
+        end
         self
       end
 
       # Re-issue the join push without resetting @joined_once. Used by the
-      # client after a socket reconnect to restore channel subscriptions.
+      # client after a socket reconnect to restore channel subscriptions, and by
+      # the rejoin timer after a join error.
       def rejoin
         return unless @joined_once
 
         @state = Types::ChannelStates::JOINING
         inject_postgres_changes_bindings
-        @join_push.instance_variable_set(:@ref, @socket&.next_ref)
-        @join_push.instance_variable_set(:@received_status, nil)
-        send_push(@join_push, register_pending: true)
+        send_join_push
         self
       end
 
@@ -221,6 +226,26 @@ module Supabase
         self
       end
 
+      # Push the rotated access_token to the server for this channel. Called by
+      # {Client#set_auth} for every joined channel, mirroring supabase-py
+      # (client.py:335-337): `await channel.push(ChannelEvents.access_token,
+      # {"access_token": token})`. Routing through the normal push path means the
+      # frame is buffered (not dropped) when the socket is momentarily offline,
+      # matching py's `channel.push` buffering — the prior version only sent when
+      # `connected?` and silently lost the rotation otherwise.
+      def push_access_token(token)
+        return unless @joined_once
+
+        ref  = @socket&.next_ref
+        push = Push.new(self,
+                        Types::ChannelEvents::ACCESS_TOKEN,
+                        { "access_token" => token },
+                        ref: ref,
+                        timeout: Types::DEFAULT_TIMEOUT_SECONDS)
+        send_push(push, register_pending: true)
+        self
+      end
+
       # Public low-level push for arbitrary Phoenix events. Mirrors
       # `supabase-py`'s `channel.push(event, payload, timeout)`. Returns the
       # {Push} instance so callers can attach receive() handlers and observe the
@@ -257,19 +282,21 @@ module Supabase
         when Types::ChannelEvents::PRESENCE_DIFF
           @presence.sync_diff(message.payload)
         when Types::ChannelEvents::SYSTEM
-          @system_callbacks.each do |cb|
-            CallbackSafety.safe(logger, "system") { cb.call(message.payload) }
+          # supabase-py routes system frames by status (channel.py:520-525): a
+          # `status: "ok"` payload reaches the on_system callbacks; anything else
+          # (e.g. a postgres_changes subscription failure reported via `system`)
+          # is treated as a channel error → ERRORED + rejoin scheduled.
+          if message.payload.is_a?(Hash) && message.payload["status"] == "error"
+            trigger_channel_error(message.payload)
+          else
+            @system_callbacks.each do |cb|
+              CallbackSafety.safe(logger, "system") { cb.call(message.payload) }
+            end
           end
         when Types::ChannelEvents::CLOSE
-          @state = Types::ChannelStates::CLOSED
-          @close_callbacks.each do |cb|
-            CallbackSafety.safe(logger, "phx_close") { cb.call(message.payload) }
-          end
+          handle_channel_close(message.payload)
         when Types::ChannelEvents::ERROR
-          @state = Types::ChannelStates::ERRORED
-          @error_callbacks.each do |cb|
-            CallbackSafety.safe(logger, "phx_error") { cb.call(message.payload) }
-          end
+          trigger_channel_error(message.payload)
         end
 
         true
@@ -292,10 +319,23 @@ module Supabase
       # so the server filters before sending, instead of shipping every change
       # for the topic and forcing the client to drop most of them. Also flips
       # config.presence.enabled when any presence callback is attached, so the
-      # server starts emitting presence_state/diff frames. Finally, pulls the
-      # current socket access_token onto config.access_token so RLS sees the
-      # caller's JWT — private channels reject the join otherwise. The token
-      # source is identical to what set_auth rotates (single source of truth).
+      # server starts emitting presence_state/diff frames.
+      #
+      # The access_token is placed at the ROOT of the join payload (a sibling of
+      # "config"), and only when a token is actually present — matching
+      # supabase-py's `channel.py` exactly:
+      #
+      #   config_payload = { "config": { ... } }
+      #   if self.socket.access_token:
+      #       config_payload["access_token"] = self.socket.access_token
+      #
+      # The server / Phoenix gateway reads `payload.access_token`, NOT
+      # `payload.config.access_token`. Nesting it under config (as a prior
+      # version of this port did) meant the caller's JWT never reached RLS and
+      # private channels authorized with the URL apikey only. The token source is
+      # the same field set_auth rotates (Client#access_token) — single source of
+      # truth. On rejoin the payload hash is reused, so an explicitly-cleared
+      # token must delete the stale key rather than leave it behind.
       def inject_postgres_changes_bindings
         config = (@join_push.payload["config"] ||= {})
         config["postgres_changes"] = @postgres_changes_callbacks.map do |binding|
@@ -309,7 +349,12 @@ module Supabase
         presence_cfg = (config["presence"] ||= {})
         presence_cfg["enabled"] = true if @presence.any_callbacks?
 
-        config["access_token"] = @socket&.access_token
+        token = @socket&.access_token
+        if token
+          @join_push.payload["access_token"] = token
+        else
+          @join_push.payload.delete("access_token")
+        end
       end
 
       # If a presence callback is added after the channel is already joined,
@@ -324,6 +369,20 @@ module Supabase
         subscribe(&@subscribe_callback)
       end
 
+      # Put the join push on the wire — but only when the socket is actually
+      # open. When it isn't, the join is intentionally NOT sent or buffered here:
+      # the client's rejoin_channels re-sends it the moment the socket opens, and
+      # sending/buffering it here too would duplicate the join (the server then
+      # phx_closes the extra one). Assigns a fresh ref and clears any prior reply
+      # status so a rejoin is matched to its own phx_reply.
+      def send_join_push
+        return unless @socket&.connected?
+
+        @join_push.instance_variable_set(:@ref, @socket.next_ref)
+        @join_push.instance_variable_set(:@received_status, nil)
+        send_push(@join_push, register_pending: true)
+      end
+
       def send_push(push, register_pending:)
         message = Message.new(
           event:    push.event,
@@ -333,14 +392,15 @@ module Supabase
           join_ref: @join_push.ref
         )
 
+        if register_pending && push.ref
+          @pending_pushes[push.ref] = push
+          # Arm the timeout when the push is queued, not when it hits the wire
+          # (py parity, channel.py:318-323): a push buffered on a channel that
+          # never reaches JOINED must resolve TIMEOUT, not hang forever.
+          push.start_timeout
+        end
+
         if can_send?(push)
-          if register_pending && push.ref
-            @pending_pushes[push.ref] = push
-            # Arm the timeout only once the push is actually on the wire — if it
-            # gets buffered (channel not yet joined) we leave it untimed until
-            # the buffer is flushed.
-            push.start_timeout
-          end
           @socket&.push(message)
         else
           @push_buffer << [push, register_pending]
@@ -385,13 +445,18 @@ module Supabase
           next unless binding[:event] == change_type || binding[:event] == "*"
           next if binding[:schema] && binding[:schema] != schema
           next if binding[:table]  && binding[:table]  != table
-          # Server-side binding-id routing: once on_join_ok has recorded the
-          # server-assigned :id, an inbound frame's payload.ids tells us which
-          # bindings the server intended to fire. This is how two bindings on
-          # the same (schema, table) but different :filter get demultiplexed —
-          # without it both would fire on every change. Before the join-ack
-          # (no :id yet) we fall through and the legacy event/schema/table
-          # filtering remains the sole gate.
+          # DIVERGES FROM PY/JS (intentional — see docs/PARITY.md D7): supabase-py
+          # AND realtime-js demultiplex postgres_changes *solely* by the
+          # server-assigned binding id (`id && ids.include?(id)`), so a binding
+          # with no id fires for nothing. We instead filter client-side on
+          # event/schema/table (above) and use the server id only as an
+          # additional demux when present. This is more robust — events still
+          # route correctly even if the server omits ids — at the cost of one
+          # narrow edge case: two bindings on the SAME (schema, table, event)
+          # differing only by `:filter`, while neither has a server id yet, will
+          # both fire (we don't evaluate PostgREST `:filter` client-side). In the
+          # normal flow on_join_ok records the ids on the join-ack, after which
+          # this gate demuxes them correctly.
           next if binding[:id] && ids.is_a?(Array) && !ids.include?(binding[:id])
 
           CallbackSafety.safe(logger, "postgres_changes:#{binding[:event]}") do
@@ -480,13 +545,52 @@ module Supabase
       def flush_push_buffer
         buffered = @push_buffer
         @push_buffer = []
-        buffered.each { |push, register_pending| send_push(push, register_pending: register_pending) }
+        buffered.each do |push, register_pending|
+          # A push that resolved while buffered (timed out waiting for the join)
+          # must not go on the wire late — its caller already saw TIMEOUT.
+          next if push.received_status
+
+          send_push(push, register_pending: register_pending)
+        end
       end
 
       def on_leave_ack
+        handle_channel_close({})
+      end
+
+      # Channel teardown — mirrors supabase-py `channel.on_close`
+      # (channel.py:134-138): cancel any pending rejoin, mark CLOSED, fire the
+      # registered close listeners, and remove the channel from the owning
+      # client's registry so a CLOSED channel no longer receives dispatched
+      # frames and doesn't leak across a subscribe/unsubscribe churn cycle. The
+      # registry removal is the fix for the prior leak where unsubscribed
+      # channels stayed in `client.channels` forever and kept running
+      # presence/broadcast dispatch.
+      #
+      # (Named distinctly from the public {#on_close} listener registrar, which
+      # is an rb-only convenience with no py counterpart.)
+      def handle_channel_close(payload = {})
+        @rejoin_timer.reset
         @state = Types::ChannelStates::CLOSED
         @close_callbacks.each do |cb|
-          CallbackSafety.safe(logger, "phx_close") { cb.call({}) }
+          CallbackSafety.safe(logger, "phx_close") { cb.call(payload) }
+        end
+        @socket._remove_channel(self) if @socket.respond_to?(:_remove_channel)
+      end
+
+      # Mirrors supabase-py `channel.on_error` (channel.py:140-146): a phx_error
+      # frame, or a `system` frame with status "error", errors the channel and
+      # schedules a rejoin with exponential backoff so a transient server-side
+      # channel crash self-heals instead of staying dead until the whole socket
+      # drops. No-op while LEAVING/CLOSED so a phx_error racing an unsubscribe
+      # can't flip the channel back to ERRORED.
+      def trigger_channel_error(payload)
+        return if leaving? || closed?
+
+        @state = Types::ChannelStates::ERRORED
+        @rejoin_timer.schedule_timeout
+        @error_callbacks.each do |cb|
+          CallbackSafety.safe(logger, "phx_error") { cb.call(payload) }
         end
       end
     end

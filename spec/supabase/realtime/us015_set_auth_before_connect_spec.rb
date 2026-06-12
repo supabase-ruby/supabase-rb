@@ -63,7 +63,8 @@ RSpec.describe "US-015: set_auth before connect keeps the token" do
       join = socket.last_sent_frame
       expect(join["event"]).to eq("phx_join")
       expect(join["topic"]).to eq("realtime:public:users")
-      expect(join["payload"]["config"])
+      # D1: access_token lives at the payload root (sibling of config), per supabase-py.
+      expect(join["payload"])
         .to include("access_token" => "set-before-connect-jwt")
     end
 
@@ -76,7 +77,7 @@ RSpec.describe "US-015: set_auth before connect keeps the token" do
 
       client.channel("public:items").subscribe
 
-      expect(socket.last_sent_frame["payload"]["config"])
+      expect(socket.last_sent_frame["payload"])
         .to include("access_token" => "third")
     end
   end

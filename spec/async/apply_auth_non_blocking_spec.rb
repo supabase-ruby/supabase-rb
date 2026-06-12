@@ -81,7 +81,12 @@ RSpec.describe "US-047 — Supabase::Client#apply_auth fiber-reactor blocking me
     )
     realtime.connect
     channel = realtime.channel("realtime:public:users")
+    # A real JOINED channel has always completed a join handshake, so
+    # @joined_once is true. set_auth's fan-out gates on both (mirroring
+    # supabase-py's `if channel._joined_once and channel.is_joined`), so the
+    # fixture must set both to exercise the access_token push.
     channel.instance_variable_set(:@state, Supabase::Realtime::Types::ChannelStates::JOINED)
+    channel.instance_variable_set(:@joined_once, true)
     slow_socket.sent_frames.clear
 
     client.instance_variable_set(:@realtime, realtime)
