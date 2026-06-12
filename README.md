@@ -1,5 +1,9 @@
 # `supabase-rb`
 
+[![CI](https://github.com/supabase-ruby/supabase-rb/actions/workflows/ci.yml/badge.svg)](https://github.com/supabase-ruby/supabase-rb/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/supabase-ruby/supabase-rb/branch/main/graph/badge.svg)](https://codecov.io/gh/supabase-ruby/supabase-rb)
+[![Gem Version](https://badge.fury.io/rb/supabase-rb.svg)](https://rubygems.org/gems/supabase-rb)
+[![Downloads](https://img.shields.io/gem/dt/supabase-rb.svg)](https://rubygems.org/gems/supabase-rb)
 [![Ruby](https://img.shields.io/badge/ruby-%3E%3D%203.0-red)](https://www.ruby-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
