@@ -6,7 +6,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for general contribution guidelines.
 
 ## Maintainers (in alphabetical order)
 
-<!-- Add maintainer GitHub handles here as the project grows. -->
+- Bogdan Tarasenko ([@bogdantarasenko](https://github.com/bogdantarasenko))
 
 ## Emeritus Maintainers (in alphabetical order)
 
