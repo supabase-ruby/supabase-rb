@@ -185,6 +185,15 @@ RSpec.describe "US-007: presence_state thread safety under load" do
       end
 
       injector.join
+      # Don't stop the reader before it has been scheduled at least once: on a
+      # busy two-core CI runner the injector can burn through all 500 frames
+      # before the reader thread ever runs, leaving `reads == 0` and flaking
+      # the `reads > 0` assertion below.
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+      while reads.zero? && reader_errors.empty? &&
+            Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+        sleep 0.005
+      end
       stop = true
       reader.join
 
