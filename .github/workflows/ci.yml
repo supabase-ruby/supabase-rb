@@ -14,23 +14,10 @@ jobs:
       matrix:
         ruby-version: ["3.0", "3.1", "3.2", "3.3"]
 
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_USER: supabase_auth_admin
-          POSTGRES_PASSWORD: root
-          POSTGRES_DB: supabase_auth
-          POSTGRES_PORT: 5432
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
+    # No services: block here — infra/docker-compose.yml brings up its own
+    # Postgres (published on 5432) for the GoTrue containers. A second
+    # service-container Postgres on the same host port made `docker compose up`
+    # fail with "Bind for 0.0.0.0:5432 failed: port is already allocated".
     steps:
       - uses: actions/checkout@v4
 
