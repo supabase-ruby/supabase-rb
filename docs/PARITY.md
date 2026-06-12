@@ -502,11 +502,16 @@ Priority order:
    real PostgREST). rb has live integration only for realtime.
 4. **`Postgrest::Client#auth`** — method exists (`client.rb:60`), zero specs; basic-auth branch
    fully untested.
-5. **Auth live-server tests** — entire py gotrue suite hits real GoTrue; rb is mock-only.
+5. **Auth live-server tests** — ✅ CLOSED 2026-06-12: CI now boots the GoTrue compose stack
+   (port-5432 conflict fixed) and the live auth suite runs green on every push.
 6. **Realtime repeated `connect()` idempotency** — `test_multiple_connect_attempts`, no rb test.
 
 **rb-only test areas to verify as "invented behavior":** storage analytics/vectors specs (no
 py tests), postgrest retry specs, realtime transport-layer specs, `AuthPKCEError`.
+
+**Known flake (unidentified, 2026-06-12):** one full-suite run with the live Supabase stack
+failed with 1/2314 (output lost before triage); not reproduced in 7 follow-up local runs nor
+in a CI rerun. If it resurfaces, capture the seed + failure block before cleaning up.
 
 ---
 
@@ -517,6 +522,8 @@ Tracked separately, but summary of levels:
 - **L0 — blockers:** D1 (realtime access_token), D2–D6, C-TL-1 (auth bearer refresh).
 - **L1 — reconcile py-1:1 divergences:** every 🔧/🐞 row above — reproduce py or add
   `# DIVERGES FROM PY (intentional)` with rationale. Decide bug-for-bug vs documented fix.
-- **L2 — operational maturity:** Dockerized integration tests (GoTrue/PostgREST/Storage/
-  Realtime), CI matrix (Ruby 3.0–3.4), RuboCop, coverage gate, SemVer + CHANGELOG, YARD docs,
-  documented + guaranteed-thread-safe concurrency model for realtime.
+- **L2 — operational maturity:** Dockerized integration tests (GoTrue ✅ in CI since
+  2026-06-12; PostgREST/Storage/Realtime still local-only via realtime_seed.sql), CI matrix
+  (Ruby 3.1–3.3 ✅ green; 3.0 dropped — dev deps need >= 3.1; 3.4 TODO), RuboCop, coverage
+  gate (✅ 88% enforced in CI), SemVer + CHANGELOG, YARD docs, documented +
+  guaranteed-thread-safe concurrency model for realtime.
