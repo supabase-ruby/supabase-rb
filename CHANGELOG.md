@@ -5,6 +5,17 @@ follow [Semantic Versioning](https://semver.org/). The Ruby port tracks
 feature parity with [supabase-py](https://github.com/supabase/supabase-py); see
 that project's CHANGELOG for the historical upstream context behind each port.
 
+## [3.2.1](https://github.com/supabase-ruby/supabase-rb/compare/v3.2.0...v3.2.1) (2026-06-12)
+
+
+### Bug Fixes
+
+* **auth:** get_claims JWT verification parity + domain-error passthrough ([8cf1bbe](https://github.com/supabase-ruby/supabase-rb/commit/8cf1bbeaf406958c77016c450e28e33b76b40fa0))
+* **client:** legacy options-shape detector no longer collides with ClientOptions fields ([b4a963d](https://github.com/supabase-ruby/supabase-rb/commit/b4a963d892926a05eb060270be92331cab3db791))
+* **postgrest,functions,storage:** follow redirects + documented py-bug divergences ([6b1c20e](https://github.com/supabase-ruby/supabase-rb/commit/6b1c20e0d5fc79dbcddb38c96eb64f2bd6222f48))
+* **realtime:** retry initial connect with backoff (D5) + teardown/reconnect parity ([7a2c67c](https://github.com/supabase-ruby/supabase-rb/commit/7a2c67cae84f37bee492477f24079bc726732cfe))
+* **realtime:** use Async::Variable instead of Async::Promise in AsyncWebsocket ([f9281cd](https://github.com/supabase-ruby/supabase-rb/commit/f9281cde9d0dd6e5cda567f6354845d83dbf507e))
+
 ## [Unreleased]
 
 ## [3.2.0] — Async realtime teardown + breaking parity cleanup
