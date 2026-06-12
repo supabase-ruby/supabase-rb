@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "async"
+require "async/variable"
 require "async/http/endpoint"
 require "async/websocket/client"
 require "protocol/websocket/message"
@@ -72,7 +73,12 @@ module Supabase
           end
 
           endpoint = ::Async::HTTP::Endpoint.parse(@url)
-          ready    = ::Async::Promise.new
+          # Async::Variable, not Async::Promise: Promise only exists in newer
+          # async releases (Ruby >= 3.2 resolutions), while Variable is
+          # available across all async 2.x — and 3.1 resolves async 2.24.
+          # Variable has no #reject, so a connect error is resolved as a value
+          # and re-raised by the waiting side below.
+          ready = ::Async::Variable.new
 
           @session = parent.async do
             @connector.connect(endpoint, headers: header_pairs) do |connection|
@@ -84,15 +90,17 @@ module Supabase
             end
           rescue => err
             fire_error(err)
-            ready.reject(err) unless ready.resolved?
+            ready.resolve(err) unless ready.resolved?
           ensure
             fire_close
           end
 
-          # Cooperative wait — Promise buffers the resolution, so this returns
+          # Cooperative wait — Variable buffers the resolution, so this returns
           # immediately whether the session task got there first or not. After
           # this, callers can rely on connected?.
-          ready.wait
+          outcome = ready.wait
+          raise outcome if outcome.is_a?(Exception)
+
           nil
         end
 
