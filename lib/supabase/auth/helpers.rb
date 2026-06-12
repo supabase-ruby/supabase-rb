@@ -90,6 +90,8 @@ module Supabase
         /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i.match?(value)
       end
 
+      # Mirrors py `validate_exp` (helpers.py:286-292): no clock-skew leeway —
+      # a token is rejected the moment `exp <= now`.
       def validate_exp(exp)
         raise Errors::AuthInvalidJwtError, "JWT has no expiration time" if exp.nil? || exp == 0
 

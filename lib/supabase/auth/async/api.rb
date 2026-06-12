@@ -18,6 +18,7 @@ module Supabase
 
         def build_connection
           Faraday.new(url: @url, ssl: { verify: @verify }, proxy: @proxy) do |f|
+            f.response :follow_redirects
             f.response :raise_error
             if @timeout
               f.options.timeout = @timeout

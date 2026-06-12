@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "faraday"
+require "faraday/follow_redirects"
 require "json"
 
 module Supabase
@@ -59,6 +60,15 @@ module Supabase
         result = no_resolve_json ? response : parse_response(response)
 
         xform ? xform.call(result) : result
+      rescue Errors::AuthError
+        # A domain error raised inside the request — typically by an `xform`
+        # (e.g. JWKS parsing raising AuthInvalidJwtError) or response parsing —
+        # is already the correct exception. Re-raise it unchanged. Without this
+        # clause the blanket `rescue StandardError` below funnels it through
+        # handle_exception, which masks every non-Faraday error as
+        # AuthRetryableError(status: 0) — so callers of get_claims would see a
+        # spurious "retryable" error instead of the real AuthInvalidJwtError.
+        raise
       rescue Faraday::Error => e
         raise Helpers.handle_exception(e)
       rescue StandardError => e
@@ -99,6 +109,10 @@ module Supabase
 
       def build_connection
         Faraday.new(url: @url, ssl: { verify: @verify }, proxy: @proxy) do |f|
+          # Follow 3xx (httpx `follow_redirects=True` in supabase-py) before
+          # raise_error inspects the status, so a redirect isn't turned into an
+          # error.
+          f.response :follow_redirects
           f.response :raise_error
           if @timeout
             f.options.timeout = @timeout

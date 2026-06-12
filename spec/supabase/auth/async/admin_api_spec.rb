@@ -30,6 +30,13 @@ RSpec.describe Supabase::Auth::Async::AdminApi do
     expect(admin.oauth).to be_a(Supabase::Auth::Async::AdminOAuthApi)
   end
 
+  it "follows 3xx redirects like the sync AdminApi (httpx follow_redirects=True)" do
+    handler_names = admin.send(:connection).builder.handlers.map { |h| h.klass.name }
+    expect(handler_names).to include("FaradayMiddleware::FollowRedirects").or(
+      include("Faraday::FollowRedirects::Middleware")
+    )
+  end
+
   describe "user CRUD round trip" do
     it "creates, reads, updates, then deletes a user" do
       created_id = nil

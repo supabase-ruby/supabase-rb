@@ -13,6 +13,7 @@ module Supabase
       STORAGE_KEY = "supabase.auth.token"
       EXPIRY_MARGIN = 10
       JWKS_TTL = 600 # 10 minutes
+
       # Explicit asymmetric algorithm-to-digest mapping (reference table).
       ALG_TO_DIGEST = {
         "RS256" => "SHA256", "RS384" => "SHA384", "RS512" => "SHA512",
@@ -712,12 +713,23 @@ module Supabase
         # same message py would raise.
         raise Errors::AuthInvalidJwtError, "Algorithm not supported" unless SUPPORTED_ALGORITHMS.include?(header["alg"])
 
-        # Asymmetric JWT - verify via JWKS using the jwt gem's decode
+        # Asymmetric JWT — signature verification ONLY, matching py exactly:
+        # py calls algorithm.verify() (gotrue_client.py:1272-1282) after the
+        # manual validate_exp above, so no claim validation (exp/nbf) happens
+        # here — the jwt gem's defaults are explicitly switched off.
         jwk_data = _fetch_jwks(header["kid"], jwks || { "keys" => [] })
         jwk_set = JWT::JWK::Set.new({ "keys" => [jwk_data] })
 
         begin
-          JWT.decode(token, nil, true, { algorithms: [header["alg"]], jwks: jwk_set })
+          JWT.decode(
+            token, nil, true,
+            {
+              algorithms: [header["alg"]],
+              jwks: jwk_set,
+              verify_expiration: false,
+              verify_not_before: false
+            }
+          )
         rescue JWT::DecodeError => e
           raise Errors::AuthInvalidJwtError, "Invalid JWT signature: #{e.message}"
         end

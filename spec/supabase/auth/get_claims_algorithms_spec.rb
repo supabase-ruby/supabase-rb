@@ -142,14 +142,17 @@ RSpec.describe "Supabase::Auth::Client#get_claims algorithm parity" do
 
       signing_key = RbNaCl::Signatures::Ed25519::SigningKey.generate
       verify_key  = signing_key.verify_key
-      token = JWT.encode(payload, signing_key, "ED25519", { "kid" => kid, "typ" => "JWT" })
+      # Use the standard JOSE algorithm name "EdDSA" (RFC 8037) — the value real
+      # Supabase tokens and PyJWT use. ruby-jwt's legacy "ED25519" name is
+      # deprecated and isn't a real-world `alg` header, so we don't accept it.
+      token = JWT.encode(payload, signing_key, "EdDSA", { "kid" => kid, "typ" => "JWT" })
 
       jwk = JWT::JWK.new(verify_key, kid: kid)
       jwks = { "keys" => [jwk.export.transform_keys(&:to_s)] }
 
       result = client.get_claims(jwt: token, jwks: jwks)
       expect(result).to be_a(Supabase::Auth::Types::ClaimsResponse)
-      expect(result.headers["alg"]).to eq("ED25519").or eq("EdDSA")
+      expect(result.headers["alg"]).to eq("EdDSA")
     end
   end
 

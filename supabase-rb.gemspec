@@ -49,4 +49,9 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "async", "~> 2.0"
   spec.add_development_dependency "async-http-faraday", "~> 0.20"
   spec.add_development_dependency "async-websocket", "~> 0.30"
+  # Optional: enables EdDSA/Ed25519 JWT verification in get_claims so that
+  # algorithm's live verify path is exercised in the test suite. Requires the
+  # system `libsodium` library. The EdDSA spec still self-skips if this can't be
+  # loaded, so this stays a soft/test-only dependency.
+  spec.add_development_dependency "rbnacl", "~> 7.1"
 end
