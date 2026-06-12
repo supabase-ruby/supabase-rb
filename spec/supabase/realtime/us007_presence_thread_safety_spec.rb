@@ -86,6 +86,15 @@ RSpec.describe "US-007: presence_state thread safety under load" do
       end
 
       writer.join
+      # Same scheduling guard as the injection example below: on a busy CI
+      # runner the writer can finish all iterations before any reader thread
+      # is scheduled, leaving `reads == 0` and flaking the sanity assertion
+      # (observed on the ubuntu-latest Ruby 3.1 job).
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+      while reads.zero? && reader_errors.empty? &&
+            Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+        sleep 0.005
+      end
       stop = true
       readers.each(&:join)
 

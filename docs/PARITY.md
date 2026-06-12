@@ -509,9 +509,11 @@ Priority order:
 **rb-only test areas to verify as "invented behavior":** storage analytics/vectors specs (no
 py tests), postgrest retry specs, realtime transport-layer specs, `AuthPKCEError`.
 
-**Known flake (unidentified, 2026-06-12):** one full-suite run with the live Supabase stack
-failed with 1/2314 (output lost before triage); not reproduced in 7 follow-up local runs nor
-in a CI rerun. If it resurfaces, capture the seed + failure block before cleaning up.
+**Flake (identified & fixed, 2026-06-12):** `us007_presence_thread_safety_spec` had TWO
+examples asserting `reads > 0` where the writer/injector could finish before any reader
+thread was scheduled. Caught once locally (output lost), then on the Ruby 3.2 CI job (frame
+injection example), then on the Ruby 3.1 CI job (presence writer example). Both now wait
+(bounded 5s) for at least one completed read before stopping the readers.
 
 ---
 
