@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "faraday"
+require "faraday/follow_redirects"
 require "json"
 require "uri"
 
@@ -134,6 +135,7 @@ module Supabase
 
       def build_session
         Faraday.new(url: @base_url, ssl: { verify: @verify }, proxy: @proxy) do |f|
+          f.response :follow_redirects
           f.options.timeout = @timeout
           f.options.open_timeout = @timeout
           f.adapter Faraday.default_adapter
@@ -170,7 +172,13 @@ module Supabase
       def raise_for_relay!(response)
         # The relay layer signals its own errors via this response header (set to
         # "true"). The function itself doesn't set this — only the relay.
-        relay = response.headers["x-relay-header"] || response.headers["X-Relay-Header"]
+        #
+        # DIVERGES FROM PY (intentional): supabase-py reads `x-relay-header`,
+        # which is a long-standing bug — the actual relay error header is
+        # `x-relay-error` (see @supabase/functions-js: `headers.get('x-relay-error')`).
+        # We follow supabase-js (the canonical client) so relay errors are
+        # detected against a real Supabase deployment.
+        relay = response.headers["x-relay-error"] || response.headers["X-Relay-Error"]
         return unless relay == "true"
 
         parsed = parse_json_safe(response.body) || {}
@@ -193,7 +201,12 @@ module Supabase
         when "json"
           return body if body.empty?
 
-          parse_json_safe(body) || body
+          # The caller explicitly asked for JSON, so a body that doesn't parse
+          # is a contract violation and must surface — not be silently handed
+          # back as a raw String (which the old `parse_json_safe(body) || body`
+          # did, leaving callers to discover the wrong type at runtime). Mirrors
+          # supabase-py's `response.json()`, which raises on invalid JSON.
+          JSON.parse(body)
         when "binary"
           # Byte-for-byte copy with BINARY (ASCII-8BIT) encoding. Faraday may
           # hand us the body tagged as UTF-8 even when it's raw bytes; force

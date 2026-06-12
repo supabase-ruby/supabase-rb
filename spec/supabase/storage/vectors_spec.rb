@@ -111,6 +111,21 @@ RSpec.describe Supabase::Storage::VectorsClient do
       expect(r.next_token).to eq("tok")
     end
 
+    it "#list_indexes sends camelCase body keys (not py's snake_case)" do
+      # Regression: py sends next_token/max_results here while every sibling
+      # action uses camelCase. We send nextToken/maxResults to match.
+      stub_request(:post, "#{base}/vector/ListIndexes")
+        .with(body: JSON.generate(
+          "vectorBucketName" => "docs",
+          "nextToken"        => "cursor",
+          "maxResults"       => 25,
+          "prefix"           => "p/"
+        ))
+        .to_return(status: 200, body: JSON.generate("indexes" => [], "nextToken" => nil))
+
+      scope.list_indexes(next_token: "cursor", max_results: 25, prefix: "p/")
+    end
+
     it "#delete_index hits DeleteIndex" do
       stub_request(:post, "#{base}/vector/DeleteIndex")
         .with(body: JSON.generate("vectorBucketName" => "docs", "indexName" => "p"))

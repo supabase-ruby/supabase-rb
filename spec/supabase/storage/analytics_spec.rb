@@ -81,8 +81,20 @@ RSpec.describe Supabase::Storage::AnalyticsClient do
       expect(cfg["token"]).to eq("service-key")
     end
 
+    it "finds the key case-insensitively (umbrella client sends lowercase 'apikey')" do
+      h = headers.merge("apikey" => "service-key")
+      c = Supabase::Storage::Client.new(base_url: base, headers: h).analytics
+
+      cfg = c.catalog("warehouse", access_key_id: "AKIA", secret_access_key: "secret")
+      expect(cfg["token"]).to eq("service-key")
+    end
+
     it "raises when no apiKey is in the headers (py asserts it)" do
-      expect { analytics.catalog("w", access_key_id: "k", secret_access_key: "s") }
+      bare = Supabase::Storage::Client.new(
+        base_url: base, headers: { "Authorization" => "Bearer tok" }
+      ).analytics
+
+      expect { bare.catalog("w", access_key_id: "k", secret_access_key: "s") }
         .to raise_error(Supabase::Storage::Errors::StorageApiError, /apiKey/)
     end
   end

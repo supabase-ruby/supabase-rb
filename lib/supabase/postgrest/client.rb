@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "faraday"
+require "faraday/follow_redirects"
 
 require_relative "request_builder"
 require_relative "version"
@@ -174,6 +175,9 @@ module Supabase
         Faraday.new(url: @base_url, ssl: { verify: @verify }, proxy: @proxy) do |f|
           f.request :url_encoded
           f.options.params_encoder = Faraday::FlatParamsEncoder
+          # Follow 3xx like supabase-py's httpx `follow_redirects=True`, so a
+          # PostgREST/proxy redirect doesn't surface as an APIError.
+          f.response :follow_redirects
           if @timeout
             f.options.timeout = @timeout
             f.options.open_timeout = @timeout

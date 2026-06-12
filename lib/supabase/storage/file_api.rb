@@ -290,8 +290,14 @@ module Supabase
       def build_upload_io(file, filename, content_type)
         case file
         when String
-          # Treat as raw bytes/text, not a path — call sites that want path semantics
-          # pass a Pathname or open the File themselves (matches storage3's bytes/IO contract).
+          # DIVERGES FROM PY (intentional): supabase-py treats a `str` as a
+          # filesystem PATH and opens it; raw bytes must be passed as
+          # bytes/BufferedReader. We treat a String as raw bytes/text and a
+          # Pathname (or any IO) as the file source. Rationale: this matches
+          # supabase-js (which takes Blob/Buffer/File, never a path string) and
+          # avoids the silent footgun where `upload("a.png", "./a.png")` would
+          # upload the literal path string. Callers that want path semantics
+          # pass `Pathname("./a.png")` or an opened File.
           Faraday::Multipart::FilePart.new(StringIO.new(file), content_type, filename)
         when Pathname
           Faraday::Multipart::FilePart.new(file.to_s, content_type, filename)

@@ -109,6 +109,24 @@ RSpec.describe Supabase::Functions::Client, "US-027: invoke JSON parse only when
 
       expect(client.invoke("fn", response_type: :json)).to eq([1, 2, 3])
     end
+
+    # The caller asked for JSON; a body that doesn't parse must surface, not be
+    # silently returned as a raw String (the prior `parse_json_safe(body) || body`
+    # behavior). Mirrors supabase-py's `response.json()` raising on invalid JSON.
+    it "raises on an invalid JSON body instead of returning the raw String" do
+      stub_request(:post, "#{base}/fn")
+        .to_return(status: 200, body: "<html>not json</html>",
+                   headers: { "Content-Type" => "application/json" })
+
+      expect { client.invoke("fn", response_type: :json) }
+        .to raise_error(JSON::ParserError)
+    end
+
+    it "returns an empty String (not an error) for an empty JSON body" do
+      stub_request(:post, "#{base}/fn").to_return(status: 200, body: "")
+
+      expect(client.invoke("fn", response_type: :json)).to eq("")
+    end
   end
 
   # ---------------------------------------------------------------------------

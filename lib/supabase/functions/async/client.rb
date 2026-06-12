@@ -34,6 +34,7 @@ module Supabase
 
         def build_session
           Faraday.new(url: @base_url, ssl: { verify: @verify }, proxy: @proxy) do |f|
+            f.response :follow_redirects
             f.options.timeout = @timeout
             f.options.open_timeout = @timeout
             f.adapter :async_http

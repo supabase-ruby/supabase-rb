@@ -90,7 +90,12 @@ module Supabase
       end
 
       def list_indexes(next_token: nil, max_results: nil, prefix: nil)
-        json = with_metadata("next_token" => next_token, "max_results" => max_results, "prefix" => prefix)
+        # DIVERGES FROM PY (intentional): supabase-py sends snake_case body keys
+        # here (`next_token`/`max_results`) while every other vectors action —
+        # list_buckets, list — uses camelCase (`nextToken`/`maxResults`). That
+        # inconsistency is a py bug; we send camelCase to match the sibling
+        # actions and the rest of the storage/vector API.
+        json = with_metadata("nextToken" => next_token, "maxResults" => max_results, "prefix" => prefix)
         body = @client.send_action(path: "ListIndexes", json: json)
         Types::ListVectorIndexesResponse.from_hash(body)
       end

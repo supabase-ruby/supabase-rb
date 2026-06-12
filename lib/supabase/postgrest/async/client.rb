@@ -39,6 +39,7 @@ module Supabase
           Faraday.new(url: @base_url, ssl: { verify: @verify }, proxy: @proxy) do |f|
             f.request :url_encoded
             f.options.params_encoder = Faraday::FlatParamsEncoder
+            f.response :follow_redirects
             if @timeout
               f.options.timeout = @timeout
               f.options.open_timeout = @timeout

@@ -61,12 +61,14 @@ RSpec.describe Supabase::Functions::Client, "HTTP error precedes relay error (US
     end
   end
 
-  describe "200 + x-relay-header (regression guard)" do
+  describe "200 + x-relay-error (regression guard)" do
     it "still raises FunctionsRelayError when the HTTP status is OK" do
+      # supabase-js detects relay errors via `x-relay-error`; py's `x-relay-header`
+      # is a bug we deliberately don't carry.
       stub_request(:post, "#{base}/fn").to_return(
         status:  200,
         body:    JSON.generate("error" => "Relay couldn't reach the function"),
-        headers: { "x-relay-header" => "true" }
+        headers: { "x-relay-error" => "true" }
       )
 
       expect { client.invoke("fn") }

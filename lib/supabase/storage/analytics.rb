@@ -49,7 +49,11 @@ module Supabase
       # a plain Hash that a downstream iceberg-ruby (when one exists) can consume.
       # Keeping the public method present mirrors the API surface.
       def catalog(catalog_name, access_key_id:, secret_access_key:)
-        service_key = @headers["apiKey"]
+        # py reads the header through case-insensitive `httpx.Headers`; the
+        # umbrella Supabase::Client sends "apikey" (lowercase), so match any
+        # casing (exact "apiKey" wins if both spellings are present).
+        service_key = @headers["apiKey"] ||
+                      @headers.find { |k, _| k.to_s.casecmp?("apikey") }&.last
         raise Errors::StorageApiError.new("apiKey must be passed in the headers.") if service_key.to_s.empty?
 
         s3_endpoint = @base_url.sub(%r{iceberg/?\z}, "s3")

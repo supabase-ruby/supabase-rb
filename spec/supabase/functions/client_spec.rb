@@ -220,11 +220,12 @@ RSpec.describe Supabase::Functions::Client do
         }
     end
 
-    it "raises FunctionsRelayError when x-relay-header is 'true' (relay-side failure)" do
+    it "raises FunctionsRelayError when x-relay-error is 'true' (relay-side failure)" do
+      # supabase-js uses `x-relay-error`; py's `x-relay-header` is a bug not carried.
       stub_request(:post, "#{base}/fn").to_return(
         status:  200, # relay errors can come back as 200 too
         body:    JSON.generate("error" => "Relay couldn't reach the function"),
-        headers: { "x-relay-header" => "true" }
+        headers: { "x-relay-error" => "true" }
       )
 
       expect { client.invoke("fn") }
