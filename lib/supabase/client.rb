@@ -41,8 +41,9 @@ module Supabase
       if options.is_a?(Supabase::ClientOptions)
         configured_auth = options.headers["Authorization"] || options.headers[:Authorization]
       elsif options.is_a?(Hash)
-        global_headers = options[:global]&.dig(:headers) || options.dig("global", "headers") || {}
-        configured_auth = global_headers["Authorization"] || global_headers[:Authorization]
+        configured_headers = options[:global]&.dig(:headers) || options.dig("global", "headers") ||
+                             options[:headers] || options["headers"] || {}
+        configured_auth = configured_headers["Authorization"] || configured_headers[:Authorization]
       end
 
       client = new(supabase_url: supabase_url, supabase_key: supabase_key,
@@ -77,9 +78,8 @@ module Supabase
       # is kept as a raw Hash so existing callers don't break — anything
       # else is canonicalized into a ClientOptions struct so the per-sub-
       # client kwargs derivation has one code path.
-      legacy_hash_shape =
-        options.is_a?(Hash) &&
-          options.keys.any? { |k| %i[auth postgrest storage functions realtime global].include?(k.to_sym) }
+      legacy_hash_shape = options.is_a?(Hash) && legacy_options_hash?(options)
+      warn_stray_legacy_keys(options) if legacy_hash_shape
 
       @options =
         if options.is_a?(Hash) && !legacy_hash_shape
@@ -109,6 +109,14 @@ module Supabase
         "apikey"        => @supabase_key,
         "Authorization" => "Bearer #{@supabase_key}"
       }.merge(configured_headers || {})
+
+      # Current access token used to authorize the data-plane sub-clients
+      # (postgrest/storage/functions) and the realtime socket. Starts as the
+      # anon key and is rotated by #apply_auth on sign-in / token refresh. Held
+      # explicitly (rather than re-derived from @headers) so that a realtime
+      # client built LAZILY after a sign-in still picks up the session token
+      # instead of the anon key — see #realtime.
+      @access_token = @supabase_key
     end
 
     def async?
@@ -143,9 +151,13 @@ module Supabase
     end
 
     def realtime
+      # Use the current access token (@access_token), not the anon key: if the
+      # caller signed in before this lazy accessor first ran, apply_auth could
+      # not push the token to a not-yet-built realtime client, so we must seed
+      # the join auth from the rotated token here. apikey stays the anon key.
       @realtime ||= Realtime::Client.new(
         url:    realtime_url,
-        params: { "apikey" => @supabase_key, "access_token" => @supabase_key },
+        params: { "apikey" => @supabase_key, "access_token" => @access_token },
         **sub_options(:realtime)
       )
     end
@@ -226,6 +238,47 @@ module Supabase
 
     private
 
+    # Keys that only occur in the legacy nested options shape — none of them
+    # is a ClientOptions field, so their presence is an unambiguous marker.
+    # `:storage` and `:realtime` are deliberately NOT in this list: both are
+    # also ClientOptions fields and need value-based disambiguation below.
+    LEGACY_ONLY_OPTION_KEYS = %i[auth postgrest functions global].freeze
+    # Every key the legacy nested shape consumes; anything else passed
+    # alongside one of these is silently invisible to the sub-clients.
+    LEGACY_OPTION_KEYS = (LEGACY_ONLY_OPTION_KEYS + %i[storage realtime]).freeze
+    private_constant :LEGACY_ONLY_OPTION_KEYS, :LEGACY_OPTION_KEYS
+
+    def legacy_options_hash?(options)
+      return true if options.keys.any? { |k| LEGACY_ONLY_OPTION_KEYS.include?(k.to_sym) }
+
+      # `:storage` exists in both shapes. A Hash can only be the legacy
+      # per-sub-client kwargs — the ClientOptions field holds a session
+      # storage *object* (get_item/set_item duck type), never a Hash.
+      #
+      # `:realtime` is a kwargs Hash in both shapes and both code paths hand
+      # it to Realtime::Client unchanged, so on its own it is not a legacy
+      # marker — routing it through ClientOptions keeps sibling fields like
+      # `:schema` from being silently dropped.
+      option_value(options, :storage).is_a?(Hash)
+    end
+
+    def option_value(options, key)
+      options.key?(key) ? options[key] : options[key.to_s]
+    end
+
+    # The legacy shape only routes its known nested keys; flat ClientOptions
+    # fields mixed in (e.g. `{ schema: "x", auth: {...} }`) never reach any
+    # sub-client. Losing them silently was the original failure mode of the
+    # shape detector, so make the remaining ambiguous case loud.
+    def warn_stray_legacy_keys(options)
+      stray = options.keys.map(&:to_sym) - LEGACY_OPTION_KEYS
+      return if stray.empty?
+
+      warn "Supabase::Client: options #{stray.inspect} are ignored when combined with the " \
+           "legacy nested options shape (#{LEGACY_OPTION_KEYS.inspect} keys). Pass a flat " \
+           "ClientOptions-style hash or a Supabase::ClientOptions instance to use them."
+    end
+
     # Single internal path shared by the public `#set_auth` and the
     # `on_auth_state_change` listener installed on `#auth`. Refreshes the
     # Authorization header used by every non-auth sub-client and resets their
@@ -238,7 +291,8 @@ module Supabase
     # waiting for every joined channel's `Socket#send` to drain — see
     # spec/async/apply_auth_non_blocking_spec.rb (US-047 / US-048).
     def apply_auth(token)
-      @headers["Authorization"] = "Bearer #{token || @supabase_key}"
+      @access_token = token || @supabase_key
+      @headers["Authorization"] = "Bearer #{@access_token}"
       @storage = @functions = @postgrest = nil
       dispatch_realtime { @realtime&.set_auth(token) }
     end

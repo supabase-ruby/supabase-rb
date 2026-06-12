@@ -214,10 +214,11 @@ RSpec.describe "US-011 — Supabase::Client state isolation" do
       expect(rt.heartbeat_interval).to eq(Supabase::Realtime::Types::DEFAULT_HEARTBEAT_INTERVAL_SECONDS)
     end
 
-    it "legacy nested Hash shape (options[:realtime]) also threads kwargs through" do
-      # The umbrella keeps `{ realtime: {...} }` as a raw Hash (legacy_hash_shape),
-      # so `sub_options(:realtime)` takes the Hash branch instead of the
-      # ClientOptions one. Same kwargs must still reach the realtime client.
+    it "plain Hash shape (options[:realtime]) also threads kwargs through" do
+      # `{ realtime: {...} }` without legacy-only keys (:auth/:postgrest/
+      # :functions/:global) is canonicalized into ClientOptions — :realtime
+      # alone is not a legacy marker. Same kwargs must still reach the
+      # realtime client via `options_from_struct(:realtime)`.
       client = Supabase::Client.new(
         supabase_url: project_url, supabase_key: key,
         options: { realtime: realtime_opts }
