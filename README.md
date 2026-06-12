@@ -9,8 +9,7 @@
 
 Ruby client for all [Supabase](https://supabase.com) libraries — Auth,
 PostgREST, Storage, Edge Functions, and Realtime — packaged in a single gem
-behind one `Supabase.create_client` factory that mirrors
-[`supabase-py`](https://github.com/supabase/supabase-py)'s `create_client()`.
+behind one `Supabase.create_client` factory.
 
 - [supabase](lib/supabase/README.md)
 - [realtime](lib/supabase/realtime/README.md)
@@ -23,7 +22,6 @@ Relevant links:
 
 - Gem: [rubygems.org/gems/supabase-rb](https://rubygems.org/gems/supabase-rb)
 - Documentation: [supabase.com/docs](https://supabase.com/docs/reference)
-- Upstream Python source: [supabase/supabase-py](https://github.com/supabase/supabase-py)
 
 ## Local Development
 
