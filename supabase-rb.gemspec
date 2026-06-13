@@ -12,14 +12,15 @@ Gem::Specification.new do |spec|
   spec.description = "Ruby client for Supabase: Auth, PostgREST, Storage, Edge Functions, and " \
                      "Realtime exposed through a single Supabase.create_client(supabase_url:, " \
                      "supabase_key:) factory, mirroring supabase-py's create_client()."
-  spec.homepage = "https://github.com/supabase-ruby/supabase-rb"
+  spec.homepage = "https://supabase-ruby.dev"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/supabase-ruby/supabase-rb"
-  spec.metadata["documentation_uri"] = "https://github.com/supabase-ruby/supabase-rb/blob/master/lib/supabase/README.md"
+  spec.metadata["documentation_uri"] = "https://supabase-ruby.dev/reference"
   spec.metadata["changelog_uri"] = "https://github.com/supabase-ruby/supabase-rb/blob/master/CHANGELOG.md"
+  spec.metadata["bug_tracker_uri"] = "https://github.com/supabase-ruby/supabase-rb/issues"
 
   spec.files = Dir[
     "lib/supabase.rb",

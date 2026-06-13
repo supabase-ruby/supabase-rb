@@ -7,6 +7,22 @@ that project's CHANGELOG for the historical upstream context behind each port.
 
 ## [Unreleased]
 
+## [3.2.1] — Gemspec metadata: point homepage and documentation at supabase-ruby.dev
+
+Metadata-only release. No code changes.
+
+### Changed
+
+- `spec.homepage` and `spec.metadata["homepage_uri"]` now point at
+  [https://supabase-ruby.dev](https://supabase-ruby.dev) (the new docs
+  site) instead of the GitHub repo.
+- `spec.metadata["documentation_uri"]` now points at
+  [https://supabase-ruby.dev/reference](https://supabase-ruby.dev/reference)
+  instead of the in-repo README.
+- Added `spec.metadata["bug_tracker_uri"]` pointing at the GitHub
+  issue tracker so rubygems.org surfaces a dedicated "Bug tracker"
+  sidebar link.
+
 ## [3.2.0] — Async realtime teardown + breaking parity cleanup
 
 Two-themed release. The non-breaking half ports the remaining `_async`
