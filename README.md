@@ -21,7 +21,8 @@ behind one `Supabase.create_client` factory.
 Relevant links:
 
 - Gem: [rubygems.org/gems/supabase-rb](https://rubygems.org/gems/supabase-rb)
-- Documentation: [supabase.com/docs](https://supabase.com/docs/reference)
+- Documentation: [supabase-ruby.dev](https://supabase-ruby.dev)
+- Supabase docs: [supabase.com/docs](https://supabase.com/docs/reference)
 
 ## Local Development
 
