@@ -22,7 +22,6 @@ Relevant links:
 
 - Gem: [rubygems.org/gems/supabase-rb](https://rubygems.org/gems/supabase-rb)
 - Documentation: [supabase-ruby.dev](https://supabase-ruby.dev)
-- Supabase docs: [supabase.com/docs](https://supabase.com/docs/reference)
 
 ## Local Development
 
