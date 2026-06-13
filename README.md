@@ -8,8 +8,8 @@
 [![Ruby](https://img.shields.io/badge/ruby-%3E%3D%203.1-red)](https://www.ruby-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**Use [Supabase](https://supabase.com) from Ruby and Rails.** `supabase-rb` is
-a single gem that wraps every Supabase product — Auth, PostgREST (Database),
+`supabase-rb` is a single gem that wraps every
+[Supabase](https://supabase.com) product — Auth, PostgREST (Database),
 Storage, Edge Functions, and Realtime — behind one `Supabase.create_client`
 factory.
 
