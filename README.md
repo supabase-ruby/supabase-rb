@@ -1,15 +1,51 @@
-# `supabase-rb`
+# `supabase-rb` — Supabase client for Ruby & Rails
 
 [![CI](https://github.com/supabase-ruby/supabase-rb/actions/workflows/ci.yml/badge.svg)](https://github.com/supabase-ruby/supabase-rb/actions/workflows/ci.yml)
 [![Gem Version](https://badge.fury.io/rb/supabase-rb.svg)](https://rubygems.org/gems/supabase-rb)
+[![Docs](https://img.shields.io/badge/docs-supabase--ruby.dev-3ECF8E)](https://supabase-ruby.dev)
 [![codecov](https://codecov.io/gh/supabase-ruby/supabase-rb/branch/main/graph/badge.svg)](https://codecov.io/gh/supabase-ruby/supabase-rb)
 [![Downloads](https://img.shields.io/gem/dt/supabase-rb.svg)](https://rubygems.org/gems/supabase-rb)
 [![Ruby](https://img.shields.io/badge/ruby-%3E%3D%203.1-red)](https://www.ruby-lang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Ruby client for all [Supabase](https://supabase.com) libraries — Auth,
-PostgREST, Storage, Edge Functions, and Realtime — packaged in a single gem
-behind one `Supabase.create_client` factory.
+**Use [Supabase](https://supabase.com) from Ruby and Rails.** `supabase-rb` is
+a single gem that wraps every Supabase product — Auth, PostgREST (Database),
+Storage, Edge Functions, and Realtime — behind one `Supabase.create_client`
+factory.
+
+> **Documentation:** [supabase-ruby.dev](https://supabase-ruby.dev) ·
+> **Reference:** [supabase-ruby.dev/reference](https://supabase-ruby.dev/reference) ·
+> **Gem:** [rubygems.org/gems/supabase-rb](https://rubygems.org/gems/supabase-rb)
+
+## Quickstart
+
+Add the gem to your `Gemfile` (works in any Ruby app, including Rails):
+
+```ruby
+# Gemfile
+gem "supabase-rb"
+```
+
+Then install and run a first query:
+
+```ruby
+require "supabase"
+
+supabase = Supabase.create_client(
+  supabase_url: ENV.fetch("SUPABASE_URL"),
+  supabase_key: ENV.fetch("SUPABASE_ANON_KEY"),
+)
+
+response = supabase.from("countries").select("*").limit(1).execute
+puts response.data
+# => [{"id" => 1, "name" => "United Kingdom"}]
+```
+
+Requires Ruby ≥ 3.1. Full reference at
+[supabase-ruby.dev/reference](https://supabase-ruby.dev/reference) — Auth,
+Database, Realtime, Storage, and Edge Functions.
+
+## In-repo module READMEs
 
 - [supabase](lib/supabase/README.md)
 - [realtime](lib/supabase/realtime/README.md)
@@ -17,11 +53,6 @@ behind one `Supabase.create_client` factory.
 - [storage](lib/supabase/storage/README.md)
 - [postgrest](lib/supabase/postgrest/README.md)
 - [supabase_auth](lib/supabase/auth/README.md)
-
-Relevant links:
-
-- Gem: [rubygems.org/gems/supabase-rb](https://rubygems.org/gems/supabase-rb)
-- Documentation: [supabase-ruby.dev](https://supabase-ruby.dev)
 
 ## Local Development
 
